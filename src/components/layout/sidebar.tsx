@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, ClipboardList, Settings, TrendingUp,
   FileBarChart2, Shield, ChevronLeft, ChevronRight,
   Building2, BookOpen, LogOut, ChevronDown, ChevronUp, User,
-  Sun, Moon, Plus, List, UserPlus, ClipboardPlus, UsersRound, ClipboardCheck, PenTool
+  Sun, Moon, Plus, List, UserPlus, ClipboardPlus, UsersRound, ClipboardCheck, PenTool, UserCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
@@ -86,6 +86,7 @@ const navGroups: NavGroup[] = [
         children: [
           { title: "Usuarios", href: "/administracion/usuarios", icon: Users },
           { title: "Roles", href: "/administracion/roles", icon: Shield },
+          { title: "Asignación Evaluaciones", href: "/administracion/asignaciones", icon: UserCheck },
           { title: "Áreas", href: "/administracion/areas", icon: Building2 },
           { title: "Cargos", href: "/administracion/cargos", icon: BookOpen },
           { title: "Importar Datos", href: "/administracion/importar", icon: FileBarChart2 },

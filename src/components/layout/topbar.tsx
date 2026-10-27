@@ -61,6 +61,7 @@ export function Topbar({ collapsed, onMenuToggle, title }: TopbarProps) {
     
     if (path === "/administracion/usuarios") return "Administración de Usuarios";
     if (path === "/administracion/roles") return "Administración de Roles";
+    if (path === "/administracion/asignaciones") return "Asignación y Planificación de Evaluaciones";
     if (path === "/administracion/areas") return "Administración de Áreas";
     if (path === "/administracion/cargos") return "Administración de Cargos";
     if (path === "/administracion/importar") return "Importar Datos del Sistema";

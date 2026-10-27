@@ -458,8 +458,22 @@ export async function saveEvaluation(payload: any) {
 
   if (rpcError) return { error: rpcError.message };
 
+  // Sincronizar estado en evaluation_assignments
+  try {
+    await adminClient
+      .from("evaluation_assignments")
+      .update({
+        evaluation_id: evalData.id,
+        status: isPendienteFirma ? "pendiente_firma" : "finalizada",
+        updated_at: new Date().toISOString()
+      })
+      .eq("collaborator_id", payload.evaluatee_id)
+      .eq("evaluation_year", payload.evaluation_year || new Date().getFullYear());
+  } catch (_) { /* No bloquear si la tabla aún no existe */ }
+
   revalidatePath("/evaluaciones");
   revalidatePath("/evaluaciones/firmas-pendientes");
+  revalidatePath("/administracion/asignaciones");
   revalidatePath("/dashboard");
 
   // Registrar en auditoría

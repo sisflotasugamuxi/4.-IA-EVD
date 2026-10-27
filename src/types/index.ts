@@ -505,3 +505,68 @@ export interface ReportFilters {
   date_from?: string;
   date_to?: string;
 }
+
+// ---- EVALUATION ASSIGNMENTS ----
+export type AssignmentStatus = "pendiente" | "en_proceso" | "pendiente_firma" | "finalizada";
+
+export interface EvaluationAssignment {
+  id: string;
+  company_id: string;
+  evaluation_year: number;
+  version_id?: string | null;
+  evaluator_id: string;
+  collaborator_id: string;
+  evaluation_id?: string | null;
+  status: AssignmentStatus;
+  notes?: string | null;
+  assigned_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  evaluator?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+    document_number?: string;
+    phone?: string;
+    positions?: { id?: string; name: string } | null;
+  };
+  collaborator?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    full_name: string;
+    document_number: string;
+    email?: string;
+    status?: string;
+    areas?: { id?: string; name: string } | null;
+    positions?: { id?: string; name: string } | null;
+  };
+  evaluation?: {
+    id: string;
+    status: string;
+    evaluation_date: string;
+    created_at?: string;
+    finalized_at?: string;
+    result?: {
+      overall_average: number;
+      result: string;
+    };
+  } | null;
+}
+
+export interface AssignmentLeaderSummary {
+  leaderId: string;
+  leaderName: string;
+  leaderEmail: string;
+  leaderPosition: string;
+  totalAssigned: number;
+  finalizedCount: number;
+  pendingCount: number;
+  inProgressCount: number;
+  pendingSignatureCount: number;
+  completionPercentage: number;
+  averageScore: number;
+  assignments: EvaluationAssignment[];
+}
+
