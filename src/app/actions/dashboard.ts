@@ -2,7 +2,7 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, getCurrentLeaderScope } from "@/lib/supabase/server";
 
 function getSupabaseAdmin() {
   return createAdminClient();
@@ -48,14 +48,17 @@ function isEligibleByHireDate(hireDateStr: string | null | undefined): boolean {
 
 export async function getDashboardStats() {
   const supabase = getSupabaseAdmin();
+  const scope = await getCurrentLeaderScope();
   
   // 1. Fetch active collaborators with hire_date, payroll_type, and areas
   const { data: collabsList } = await supabase
     .from("collaborators")
-    .select("id, hire_date, payroll_type, areas(name)")
-    .eq("status", "activo");
+    .select("id, hire_date, payroll_type, status, areas(name)");
 
-  const activeCollabs = collabsList || [];
+  let activeCollabs = (collabsList || []).filter((c: any) =>
+    scope.isLeader ? scope.assignedCollaboratorIds.has(c.id) : c.status === "activo"
+  );
+
   const totalCollabs = activeCollabs.length;
   const eligibleCollabs = activeCollabs.filter(c => isEligibleByHireDate(c.hire_date)).length;
   const exemptCollabs = totalCollabs - eligibleCollabs;
@@ -65,7 +68,7 @@ export async function getDashboardStats() {
     supabase
       .from("evaluations")
       .select(`
-        id, created_at, evaluation_year, status, evaluator_id,
+        id, created_at, evaluation_year, status, evaluator_id, evaluatee_id,
         evaluator:profiles!evaluations_evaluator_id_fkey(id, first_name, last_name),
         result:evaluation_results(*),
         collaborator:collaborators(full_name, workplace_city, payroll_type, hire_date, positions(name), areas(name))
@@ -74,7 +77,14 @@ export async function getDashboardStats() {
     getLeadersReportData()
   ]);
 
-  const allEvals = evalsRes.data || [];
+  let allEvals = evalsRes.data || [];
+  if (scope.isLeader) {
+    allEvals = allEvals.filter((e: any) =>
+      e.evaluator_id === scope.userId ||
+      (e.evaluatee_id && scope.assignedCollaboratorIds.has(e.evaluatee_id))
+    );
+  }
+
   const completed = allEvals.filter(e => e.status === 'finalizada' || e.status === 'pendiente_firma');
   
   let aprobados = 0;
@@ -98,10 +108,19 @@ export async function getDashboardStats() {
   const avgScore = validScores > 0 ? sumScore / validScores : 0;
 
   // Active PMIs
-  const { count: pmisCount } = await supabase
-    .from("evaluation_results")
-    .select("*", { count: "exact", head: true })
-    .eq("pmi_required", true);
+  let pmisCount = 0;
+  if (scope.isLeader) {
+    pmisCount = completed.filter(e => {
+      const res = e.result && !Array.isArray(e.result) ? e.result : e.result?.[0] || null;
+      return res?.pmi_required === true || res?.result === "plan_mejoramiento";
+    }).length;
+  } else {
+    const { count } = await supabase
+      .from("evaluation_results")
+      .select("*", { count: "exact", head: true })
+      .eq("pmi_required", true);
+    pmisCount = count || 0;
+  }
 
   return {
     kpis: {

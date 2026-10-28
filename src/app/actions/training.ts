@@ -1,7 +1,7 @@
 "use server";
 
 import { createServerClient } from "@supabase/ssr";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, getCurrentLeaderScope } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 
 function getSupabaseAdmin() {
@@ -37,23 +37,39 @@ export async function getTrainingRecommendations() {
 
     if (!profile?.company_id) return { data: [], error: "Empresa no encontrada" };
 
-    const { data, error } = await adminClient
-      .from("training_recommendations")
-      .select(`
-        *,
-        evaluation:evaluations(
-          id, 
-          collaborator:collaborators(full_name, positions(name), areas(name))
-        )
-      `)
-      .order("created_at", { ascending: false });
+    const [res, scope] = await Promise.all([
+      adminClient
+        .from("training_recommendations")
+        .select(`
+          *,
+          evaluation:evaluations(
+            id,
+            evaluator_id,
+            evaluatee_id,
+            collaborator:collaborators(id, full_name, positions(name), areas(name))
+          )
+        `)
+        .order("created_at", { ascending: false }),
+      getCurrentLeaderScope()
+    ]);
 
-    if (error) {
-      console.error("Error fetching training:", error);
-      return { data: [], error: error.message };
+    if (res.error) {
+      console.error("Error fetching training:", res.error);
+      return { data: [], error: res.error.message };
     }
 
-    return { data: data || [], error: null };
+    let items = res.data || [];
+    if (scope.isLeader) {
+      items = items.filter((t: any) => {
+        const ev = Array.isArray(t.evaluation) ? t.evaluation[0] : t.evaluation;
+        return (
+          ev?.evaluator_id === scope.userId ||
+          (ev?.evaluatee_id && scope.assignedCollaboratorIds.has(ev.evaluatee_id))
+        );
+      });
+    }
+
+    return { data: items, error: null };
   } catch (err: any) {
     console.error("Error in getTrainingRecommendations:", err);
     return { data: [], error: err?.message || "Error al cargar capacitaciones" };

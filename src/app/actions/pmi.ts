@@ -3,7 +3,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, getCurrentLeaderScope } from "@/lib/supabase/server";
 
 function getSupabaseAdmin() {
   return createAdminClient();
@@ -35,6 +35,19 @@ async function getSupabase() {
 
 export async function getPMIs() {
   const supabase = getSupabaseAdmin();
+  const scope = await getCurrentLeaderScope();
+
+  const filterForLeader = (rows: any[]) => {
+    if (!scope.isLeader) return rows;
+    return rows.filter((r: any) => {
+      const ev = Array.isArray(r.evaluation) ? r.evaluation[0] : r.evaluation;
+      const collab = ev?.collaborator ? (Array.isArray(ev.collaborator) ? ev.collaborator[0] : ev.collaborator) : null;
+      return (
+        ev?.evaluator_id === scope.userId ||
+        (collab?.id && scope.assignedCollaboratorIds.has(collab.id))
+      );
+    });
+  };
   
   // A PMI is basically an evaluation_result where pmi_required = true
   // or where the result is 'no_aprobado'
@@ -54,7 +67,7 @@ export async function getPMIs() {
 
   // If we have data with pmi_required=true, return it
   if (!pmiError && pmiData && pmiData.length > 0) {
-    return { data: pmiData, error: null };
+    return { data: filterForLeader(pmiData), error: null };
   }
 
   // Fallback: fetch evaluations with result = 'no_aprobado'
@@ -96,10 +109,10 @@ export async function getPMIs() {
     const filtered = (altData || []).filter(
       (r: any) => r.pmi_required === true || r.result === "no_aprobado" || (r.overall_average && r.overall_average < 3)
     );
-    return { data: filtered, error: null };
+    return { data: filterForLeader(filtered), error: null };
   }
 
-  return { data: fallbackData || [], error: null };
+  return { data: filterForLeader(fallbackData || []), error: null };
 }
 
 export async function addPMIFollowup(pmiId: string, followupData: any) {

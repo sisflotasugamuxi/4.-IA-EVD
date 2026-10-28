@@ -4,7 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "./audit";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, getCurrentLeaderScope } from "@/lib/supabase/server";
 
 function getSupabaseAdmin() {
   return createAdminClient();
@@ -118,7 +118,7 @@ export async function getCollaborators() {
     const adminClient = getSupabaseAdmin();
     const currentYear = new Date().getFullYear();
 
-    const [collabsRes, evalsRes] = await Promise.all([
+    const [collabsRes, evalsRes, scope] = await Promise.all([
       adminClient
         .from("collaborators")
         .select(`
@@ -129,7 +129,8 @@ export async function getCollaborators() {
         .order("created_at", { ascending: false }),
       adminClient
         .from("evaluations")
-        .select("id, evaluatee_id, evaluation_year, status, created_at")
+        .select("id, evaluatee_id, evaluation_year, status, created_at"),
+      getCurrentLeaderScope()
     ]);
 
     if (collabsRes.error) {
@@ -153,7 +154,12 @@ export async function getCollaborators() {
       });
     }
 
-    const enhancedData = (collabsRes.data || []).map((collab: any) => ({
+    let sourceCollabs = collabsRes.data || [];
+    if (scope.isLeader) {
+      sourceCollabs = sourceCollabs.filter((collab: any) => scope.assignedCollaboratorIds.has(collab.id));
+    }
+
+    const enhancedData = sourceCollabs.map((collab: any) => ({
       ...collab,
       has_evaluated_current_year: completedCurrentYearCollabs.has(collab.id)
     }));
@@ -167,6 +173,14 @@ export async function getCollaborators() {
 
 export async function getCollaboratorById(collaboratorId: string) {
   try {
+    const scope = await getCurrentLeaderScope();
+    if (scope.isLeader && !scope.assignedCollaboratorIds.has(collaboratorId)) {
+      return {
+        data: null,
+        error: "Acceso restringido: solo puedes visualizar la información de tus colaboradores asignados.",
+      };
+    }
+
     const adminClient = getSupabaseAdmin();
     const { data, error } = await adminClient
       .from("collaborators")

@@ -2,7 +2,7 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, getCurrentLeaderScope } from "@/lib/supabase/server";
 import { revalidatePath, unstable_noStore as noStore } from "next/cache";
 import { Resend } from "resend";
 import { logAudit } from "./audit";
@@ -272,29 +272,41 @@ export async function deleteQuestion(id: string) {
 export async function getEvaluations() {
   try {
     const adminClient = await getSupabaseAdmin();
-    const { data, error } = await adminClient
-      .from("evaluations")
-      .select(`
-        *,
-        collaborator:collaborators(
-          full_name, 
-          document_number, 
-          position_id,
-          hire_date,
-          position:positions(name),
-          areas:areas(name)
-        ),
-        evaluator:profiles!evaluator_id(first_name, last_name),
-        version:evaluation_versions(name),
-        result:evaluation_results(*)
-      `)
-      .order("created_at", { ascending: false });
+    const [evalsRes, scope] = await Promise.all([
+      adminClient
+        .from("evaluations")
+        .select(`
+          *,
+          collaborator:collaborators(
+            full_name, 
+            document_number, 
+            position_id,
+            hire_date,
+            position:positions(name),
+            areas:areas(name)
+          ),
+          evaluator:profiles!evaluator_id(first_name, last_name),
+          version:evaluation_versions(name),
+          result:evaluation_results(*)
+        `)
+        .order("created_at", { ascending: false }),
+      getCurrentLeaderScope()
+    ]);
 
-    if (error) {
-      console.error("Error fetching evaluations:", error);
-      return { error: error.message, data: [] };
+    if (evalsRes.error) {
+      console.error("Error fetching evaluations:", evalsRes.error);
+      return { error: evalsRes.error.message, data: [] };
     }
-    return { data: data || [] };
+
+    let evaluations = evalsRes.data || [];
+    if (scope.isLeader) {
+      evaluations = evaluations.filter((ev: any) =>
+        ev.evaluator_id === scope.userId ||
+        (ev.evaluatee_id && scope.assignedCollaboratorIds.has(ev.evaluatee_id))
+      );
+    }
+
+    return { data: evaluations };
   } catch (err: any) {
     console.error("Exception in getEvaluations:", err);
     return { error: err?.message || "Error al cargar evaluaciones", data: [] };
@@ -343,6 +355,18 @@ export async function getEvaluationById(evaluationId: string) {
     .single();
 
   if (error) return { error: error.message, data: null };
+
+  const scope = await getCurrentLeaderScope();
+  if (
+    scope.isLeader &&
+    data.evaluator_id !== scope.userId &&
+    (!data.evaluatee_id || !scope.assignedCollaboratorIds.has(data.evaluatee_id))
+  ) {
+    return {
+      error: "Acceso restringido: solo puedes visualizar las evaluaciones de tus colaboradores asignados.",
+      data: null,
+    };
+  }
 
   // Fetch evaluator cargo (position name) if their email is registered as a collaborator
   if (data && data.evaluator?.email) {
@@ -576,66 +600,53 @@ export async function completeCollaboratorSignature(evaluationId: string, signat
 export async function getPendingSignatureEvaluations() {
   try {
     const adminClient = await getSupabaseAdmin();
-    let roleName = "admin";
-    let currentUserId: string | null = null;
-
-    try {
-      const supabase = await getSupabase();
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData?.user?.id) {
-        currentUserId = userData.user.id;
-        const { data: profile } = await adminClient
-          .from("profiles")
-          .select("id, roles(name)")
-          .eq("id", currentUserId)
-          .single();
-        roleName = (profile?.roles as any)?.name || "admin";
-      }
-    } catch (authErr) {
-      console.warn("Non-fatal: session check in getPendingSignatureEvaluations:", authErr);
-    }
-
-    let query = adminClient
-      .from("evaluations")
-      .select(`
-        id,
-        code,
-        evaluation_year,
-        evaluation_date,
-        created_at,
-        status,
-        evaluator_id,
-        evaluatee_id,
-        strengths,
-        improvement_opportunities,
-        training_needs,
-        observations,
-        collaborator:collaborators(
+    const [evalsRes, scope] = await Promise.all([
+      adminClient
+        .from("evaluations")
+        .select(`
           id,
-          full_name,
-          document_type,
-          document_number,
-          email,
-          position:positions(name),
-          areas:areas(name)
-        ),
-        evaluator:profiles!evaluator_id(id, first_name, last_name, email, avatar_url),
-        result:evaluation_results(*)
-      `)
-      .eq("status", "pendiente_firma");
+          code,
+          evaluation_year,
+          evaluation_date,
+          created_at,
+          status,
+          evaluator_id,
+          evaluatee_id,
+          strengths,
+          improvement_opportunities,
+          training_needs,
+          observations,
+          collaborator:collaborators(
+            id,
+            full_name,
+            document_type,
+            document_number,
+            email,
+            position:positions(name),
+            areas:areas(name)
+          ),
+          evaluator:profiles!evaluator_id(id, first_name, last_name, email, avatar_url),
+          result:evaluation_results(*)
+        `)
+        .eq("status", "pendiente_firma")
+        .order("created_at", { ascending: false }),
+      getCurrentLeaderScope()
+    ]);
 
-    // Si es rol líder, filtrar para que solo vea las evaluaciones donde él fue el evaluador
-    if (roleName === "lider" && currentUserId) {
-      query = query.eq("evaluator_id", currentUserId);
+    if (evalsRes.error) {
+      console.error("Error in getPendingSignatureEvaluations:", evalsRes.error);
+      return { error: evalsRes.error.message, data: [] };
     }
 
-    const { data, error } = await query.order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Error in getPendingSignatureEvaluations:", error);
-      return { error: error.message, data: [] };
+    let pendingList = evalsRes.data || [];
+    if (scope.isLeader) {
+      pendingList = pendingList.filter((ev: any) =>
+        ev.evaluator_id === scope.userId ||
+        (ev.evaluatee_id && scope.assignedCollaboratorIds.has(ev.evaluatee_id))
+      );
     }
-    return { data: data || [] };
+
+    return { data: pendingList };
   } catch (err: any) {
     console.error("Exception in getPendingSignatureEvaluations:", err);
     return { error: err?.message || "Error al cargar evaluaciones pendientes", data: [] };
@@ -1176,12 +1187,17 @@ export async function getLeadersReportData(year?: number): Promise<{
     });
 
     // Include profiles with role 'lider' OR any profile that has assignments or evaluations
-    const leaders = allProfiles.filter((p: any) => {
+    const scope = await getCurrentLeaderScope(currentYear);
+    let leaders = allProfiles.filter((p: any) => {
       const roleName = Array.isArray(p.roles) ? p.roles[0]?.name : p.roles?.name;
       const hasAssigned = (assignmentsByLeader[p.id] || []).length > 0;
       const hasEvals = (evalsByLeader[p.id] || []).length > 0;
       return roleName === "lider" || hasAssigned || hasEvals;
     });
+
+    if (scope.isLeader && scope.userId) {
+      leaders = leaders.filter((p: any) => p.id === scope.userId);
+    }
 
     const reportItems: LeaderReportItem[] = leaders.map((l: any) => {
       const fullName = `${l.first_name || ""} ${l.last_name || ""}`.replace(/\s+/g, " ").trim();

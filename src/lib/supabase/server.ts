@@ -115,6 +115,86 @@ export async function syncProfilesToCollaborators(adminClient?: any) {
   }
 }
 
+export interface LeaderScope {
+  isLeader: boolean;
+  userId: string | null;
+  roleName: string;
+  assignedCollaboratorIds: Set<string>;
+}
+
+/**
+ * Obtiene el alcance de visibilidad para el usuario autenticado.
+ * Si el usuario tiene el rol 'lider', retorna los IDs de sus colaboradores asignados
+ * en evaluation_assignments (y evaluados directamente) para restringir la visualización
+ * en todos los módulos exclusivamente a sus colaboradores asignados.
+ */
+export async function getCurrentLeaderScope(year?: number): Promise<LeaderScope> {
+  const assignedCollaboratorIds = new Set<string>();
+  try {
+    const supabase = await createClient();
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id || null;
+
+    if (!userId) {
+      return { isLeader: false, userId: null, roleName: "", assignedCollaboratorIds };
+    }
+
+    const adminClient = createAdminClient();
+    const { data: profile } = await adminClient
+      .from("profiles")
+      .select("id, roles(name)")
+      .eq("id", userId)
+      .maybeSingle();
+
+    const roleObj = Array.isArray(profile?.roles) ? profile?.roles[0] : (profile?.roles as any);
+    const roleName = (roleObj?.name || "").toLowerCase();
+
+    if (roleName !== "lider") {
+      return { isLeader: false, userId, roleName, assignedCollaboratorIds };
+    }
+
+    // Consultar asignaciones de evaluación para este líder
+    let assignmentsQuery = adminClient
+      .from("evaluation_assignments")
+      .select("collaborator_id")
+      .eq("evaluator_id", userId);
+
+    if (year) {
+      assignmentsQuery = assignmentsQuery.eq("evaluation_year", year);
+    }
+
+    const [asgRes, evalsRes] = await Promise.all([
+      assignmentsQuery,
+      adminClient
+        .from("evaluations")
+        .select("evaluatee_id")
+        .eq("evaluator_id", userId),
+    ]);
+
+    if (asgRes.data) {
+      asgRes.data.forEach((row: any) => {
+        if (row.collaborator_id) assignedCollaboratorIds.add(row.collaborator_id);
+      });
+    }
+
+    if (evalsRes.data) {
+      evalsRes.data.forEach((row: any) => {
+        if (row.evaluatee_id) assignedCollaboratorIds.add(row.evaluatee_id);
+      });
+    }
+
+    return {
+      isLeader: true,
+      userId,
+      roleName,
+      assignedCollaboratorIds,
+    };
+  } catch (err) {
+    console.warn("getCurrentLeaderScope warning:", err);
+    return { isLeader: false, userId: null, roleName: "", assignedCollaboratorIds };
+  }
+}
+
 export async function createClient() {
   const cookieStore = await cookies();
 

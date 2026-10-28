@@ -1,7 +1,7 @@
 "use server";
 
 import { createServerClient } from "@supabase/ssr";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, getCurrentLeaderScope } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
@@ -38,24 +38,41 @@ export async function getFeedbackSessions() {
 
     if (!profile?.company_id) return { data: [], error: "Empresa no encontrada" };
 
-    const { data, error } = await adminClient
-      .from("feedback_sessions")
-      .select(`
-        *,
-        evaluation:evaluations(
-          id, 
-          created_at,
-          collaborator:collaborators(full_name, positions(name))
-        )
-      `)
-      .order("created_at", { ascending: false });
+    const [res, scope] = await Promise.all([
+      adminClient
+        .from("feedback_sessions")
+        .select(`
+          *,
+          evaluation:evaluations(
+            id, 
+            created_at,
+            evaluator_id,
+            evaluatee_id,
+            collaborator:collaborators(id, full_name, positions(name))
+          )
+        `)
+        .order("created_at", { ascending: false }),
+      getCurrentLeaderScope()
+    ]);
 
-    if (error) {
-      console.error("Error fetching feedback:", error);
-      return { data: [], error: error.message };
+    if (res.error) {
+      console.error("Error fetching feedback:", res.error);
+      return { data: [], error: res.error.message };
     }
 
-    return { data: data || [], error: null };
+    let items = res.data || [];
+    if (scope.isLeader) {
+      items = items.filter((s: any) => {
+        const ev = Array.isArray(s.evaluation) ? s.evaluation[0] : s.evaluation;
+        return (
+          s.manager_id === scope.userId ||
+          ev?.evaluator_id === scope.userId ||
+          (ev?.evaluatee_id && scope.assignedCollaboratorIds.has(ev.evaluatee_id))
+        );
+      });
+    }
+
+    return { data: items, error: null };
   } catch (err: any) {
     console.error("Error in getFeedbackSessions:", err);
     return { data: [], error: err?.message || "Error al cargar retroalimentación" };
