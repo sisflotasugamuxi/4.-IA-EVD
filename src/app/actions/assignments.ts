@@ -90,49 +90,50 @@ export async function getEvaluationAssignments(filters?: {
         return { data: [], tableNotCreated: true, error: "La tabla evaluation_assignments aún no ha sido creada en Supabase." };
       }
 
-      // Si el error es por relaciones en el schema cache (PGRST200 / relationship)
-      if (error.message.includes("relationship") || error.code === "PGRST200" || error.message.includes("schema cache")) {
-        let simpleQuery = supabase
-          .from("evaluation_assignments")
-          .select("id, company_id, evaluation_year, version_id, evaluator_id, collaborator_id, evaluation_id, status, notes, assigned_by, created_at, updated_at")
-          .eq("evaluation_year", currentYear);
+      // Si falla la consulta con joins complejos (por relaciones de clave foránea o caché de PostgREST),
+      // realizamos una consulta directa y ensamblamos las relaciones en memoria de forma 100% resiliente.
+      let simpleQuery = supabase
+        .from("evaluation_assignments")
+        .select("id, company_id, evaluation_year, version_id, evaluator_id, collaborator_id, evaluation_id, status, notes, assigned_by, created_at, updated_at")
+        .eq("evaluation_year", currentYear);
 
-        if (filters?.leaderId) {
-          simpleQuery = simpleQuery.eq("evaluator_id", filters.leaderId);
+      if (filters?.leaderId) {
+        simpleQuery = simpleQuery.eq("evaluator_id", filters.leaderId);
+      }
+      if (filters?.status && filters.status !== "todos") {
+        simpleQuery = simpleQuery.eq("status", filters.status);
+      }
+
+      const simpleRes = await simpleQuery.order("created_at", { ascending: false });
+
+      if (simpleRes.error) {
+        if (simpleRes.error.code === "PGRST205" || simpleRes.error.message.includes("does not exist")) {
+          return { data: [], tableNotCreated: true, error: "La tabla evaluation_assignments aún no ha sido creada en Supabase." };
         }
-        if (filters?.status && filters.status !== "todos") {
-          simpleQuery = simpleQuery.eq("status", filters.status);
-        }
+        return { data: [], error: simpleRes.error.message };
+      }
 
-        const simpleRes = await simpleQuery.order("created_at", { ascending: false });
+      const assignmentsRaw = simpleRes.data || [];
+      if (assignmentsRaw.length > 0) {
+        const evalIds = assignmentsRaw.map((a: any) => a.evaluation_id).filter(Boolean);
+        const [evaluatorsRes, collabsRes, evalsRes] = await Promise.all([
+          supabase.from("profiles").select("id, first_name, last_name, email, document_number, phone, positions(id, name)"),
+          supabase.from("collaborators").select("id, first_name, last_name, full_name, document_number, email, status, areas(id, name), positions(id, name)"),
+          evalIds.length > 0
+            ? supabase.from("evaluations").select("id, status, evaluation_date, created_at, finalized_at, result:evaluation_results(overall_average, result)").in("id", evalIds)
+            : Promise.resolve({ data: [] })
+        ]);
 
-        if (simpleRes.error) {
-          if (simpleRes.error.code === "PGRST205" || simpleRes.error.message.includes("does not exist")) {
-            return { data: [], tableNotCreated: true, error: "La tabla evaluation_assignments aún no ha sido creada en Supabase." };
-          }
-          return { data: [], error: simpleRes.error.message };
-        }
+        const evMap = new Map((evaluatorsRes.data || []).map((e: any) => [e.id, e]));
+        const colMap = new Map((collabsRes.data || []).map((c: any) => [c.id, c]));
+        const evalsMap = new Map(((evalsRes as any).data || []).map((ev: any) => [ev.id, ev]));
 
-        const assignmentsRaw = simpleRes.data || [];
-        if (assignmentsRaw.length > 0) {
-          const [evaluatorsRes, collabsRes] = await Promise.all([
-            supabase.from("profiles").select("id, first_name, last_name, email, document_number, phone, positions(id, name)"),
-            supabase.from("collaborators").select("id, first_name, last_name, full_name, document_number, email, status, areas(id, name), positions(id, name)")
-          ]);
-
-          const evMap = new Map((evaluatorsRes.data || []).map((e: any) => [e.id, e]));
-          const colMap = new Map((collabsRes.data || []).map((c: any) => [c.id, c]));
-
-          result = assignmentsRaw.map((item: any) => ({
-            ...item,
-            evaluator: evMap.get(item.evaluator_id) || null,
-            collaborator: colMap.get(item.collaborator_id) || null,
-            evaluation: null,
-          })) as EvaluationAssignment[];
-        }
-      } else {
-        console.error("Error fetching evaluation assignments:", error);
-        return { data: [], error: error.message };
+        result = assignmentsRaw.map((item: any) => ({
+          ...item,
+          evaluator: evMap.get(item.evaluator_id) || null,
+          collaborator: colMap.get(item.collaborator_id) || null,
+          evaluation: item.evaluation_id ? evalsMap.get(item.evaluation_id) || null : null,
+        })) as EvaluationAssignment[];
       }
     } else {
       result = (data || []) as unknown as EvaluationAssignment[];
@@ -418,15 +419,19 @@ export async function createOrUpdateAssignment(payload: {
     }
 
     await logAudit(
-      "asignacion_evaluacion",
+      "crear",
       "evaluation_assignments",
       data.id,
-      `Colaborador ID ${payload.collaborator_id} asignado a evaluador ID ${payload.evaluator_id} para ciclo ${year}`
+      `[asignacion_evaluacion] Colaborador ID ${payload.collaborator_id} asignado a evaluador ID ${payload.evaluator_id} para ciclo ${year}`
     );
 
-    revalidatePath("/administracion/asignaciones");
-    revalidatePath("/evaluaciones");
-    revalidatePath("/reportes");
+    try {
+      revalidatePath("/administracion/asignaciones");
+      revalidatePath("/evaluaciones");
+      revalidatePath("/reportes");
+    } catch (e) {
+      console.warn("Revalidation non-fatal error:", e);
+    }
 
     return { success: true, data };
   } catch (err: any) {
@@ -460,11 +465,17 @@ export async function bulkAssignCollaborators(payload: {
 
     if (!profile?.company_id) return { error: "Compañía no encontrada" };
 
+    // Deduplicar IDs de colaboradores recibidos
+    const uniqueCollabIds = Array.from(new Set(payload.collaborator_ids || []));
+    if (uniqueCollabIds.length === 0) {
+      return { error: "No se seleccionaron colaboradores para asignar" };
+    }
+
     // Buscar evaluaciones existentes para estos colaboradores
     const { data: existingEvals } = await adminClient
       .from("evaluations")
       .select("id, evaluatee_id, status")
-      .in("evaluatee_id", payload.collaborator_ids)
+      .in("evaluatee_id", uniqueCollabIds)
       .eq("evaluation_year", year);
 
     const evalsMap: Record<string, { id: string; status: string }> = {};
@@ -472,7 +483,7 @@ export async function bulkAssignCollaborators(payload: {
       evalsMap[ev.evaluatee_id] = { id: ev.id, status: ev.status };
     });
 
-    const rowsToUpsert = payload.collaborator_ids.map((collabId) => {
+    const rowsToUpsert = uniqueCollabIds.map((collabId) => {
       const existing = evalsMap[collabId];
       return {
         company_id: profile.company_id,
@@ -497,17 +508,21 @@ export async function bulkAssignCollaborators(payload: {
     }
 
     await logAudit(
-      "asignacion_masiva_evaluacion",
+      "crear",
       "evaluation_assignments",
       payload.evaluator_id,
-      `Asignados ${payload.collaborator_ids.length} colaboradores al evaluador ID ${payload.evaluator_id} para ciclo ${year}`
+      `[asignacion_masiva_evaluacion] Asignados ${uniqueCollabIds.length} colaboradores al evaluador ID ${payload.evaluator_id} para ciclo ${year}`
     );
 
-    revalidatePath("/administracion/asignaciones");
-    revalidatePath("/evaluaciones");
-    revalidatePath("/reportes");
+    try {
+      revalidatePath("/administracion/asignaciones");
+      revalidatePath("/evaluaciones");
+      revalidatePath("/reportes");
+    } catch (e) {
+      console.warn("Revalidation non-fatal error:", e);
+    }
 
-    return { success: true, count: payload.collaborator_ids.length };
+    return { success: true, count: uniqueCollabIds.length };
   } catch (err: any) {
     console.error("Exception in bulkAssignCollaborators:", err);
     return { error: err?.message || "Error en asignación masiva" };
@@ -535,15 +550,19 @@ export async function deleteAssignment(id: string) {
     }
 
     await logAudit(
-      "eliminar_asignacion_evaluacion",
+      "eliminar",
       "evaluation_assignments",
       id,
-      `Eliminada asignación de evaluación ID ${id}`
+      `[eliminar_asignacion_evaluacion] Eliminada asignación de evaluación ID ${id}`
     );
 
-    revalidatePath("/administracion/asignaciones");
-    revalidatePath("/evaluaciones");
-    revalidatePath("/reportes");
+    try {
+      revalidatePath("/administracion/asignaciones");
+      revalidatePath("/evaluaciones");
+      revalidatePath("/reportes");
+    } catch (e) {
+      console.warn("Revalidation non-fatal error:", e);
+    }
 
     return { success: true };
   } catch (err: any) {
@@ -608,18 +627,22 @@ export async function importAssignmentsFromExcelData(
       .from("collaborators")
       .select("id, document_number, full_name");
 
+    const cleanDoc = (doc: any) => (doc || "").toString().replace(/[^0-9a-zA-Z]/g, "").trim();
+
     const collabsByDoc: Record<string, { id: string; name: string }> = {};
     (collabs || []).forEach((c) => {
       if (c.document_number) {
-        collabsByDoc[c.document_number.toString().trim()] = { id: c.id, name: c.full_name };
+        const raw = c.document_number.toString().trim();
+        const clean = cleanDoc(raw);
+        collabsByDoc[raw] = { id: c.id, name: c.full_name };
+        if (clean) collabsByDoc[clean] = { id: c.id, name: c.full_name };
       }
     });
 
-    // 2. Cargar todos los usuarios con rol de líder o administrador
+    // 2. Cargar todos los perfiles de usuario del sistema (tolerante a roles)
     const { data: leaders } = await adminClient
       .from("profiles")
-      .select("id, first_name, last_name, email, document_number, roles(name)")
-      .in("roles.name", ["lider", "admin", "rrhh", "gerencia"]);
+      .select("id, first_name, last_name, email, document_number");
 
     const leadersByDoc: Record<string, { id: string; name: string }> = {};
     const leadersByEmail: Record<string, { id: string; name: string }> = {};
@@ -627,7 +650,10 @@ export async function importAssignmentsFromExcelData(
     (leaders || []).forEach((l: any) => {
       const name = `${l.first_name || ""} ${l.last_name || ""}`.trim();
       if (l.document_number) {
-        leadersByDoc[l.document_number.toString().trim()] = { id: l.id, name };
+        const raw = l.document_number.toString().trim();
+        const clean = cleanDoc(raw);
+        leadersByDoc[raw] = { id: l.id, name };
+        if (clean) leadersByDoc[clean] = { id: l.id, name };
       }
       if (l.email) {
         leadersByEmail[l.email.toLowerCase().trim()] = { id: l.id, name };
@@ -672,7 +698,8 @@ export async function importAssignmentsFromExcelData(
         return;
       }
 
-      const collab = collabsByDoc[docCollab];
+      const cleanCollabDoc = cleanDoc(docCollab);
+      const collab = collabsByDoc[docCollab] || (cleanCollabDoc ? collabsByDoc[cleanCollabDoc] : null);
       if (!collab) {
         errors.push({
           fila: rowNum,
@@ -687,7 +714,8 @@ export async function importAssignmentsFromExcelData(
         return;
       }
 
-      let leader = docLeader ? leadersByDoc[docLeader] : null;
+      const cleanLeaderDoc = cleanDoc(docLeader);
+      let leader = docLeader ? (leadersByDoc[docLeader] || (cleanLeaderDoc ? leadersByDoc[cleanLeaderDoc] : null)) : null;
       if (!leader && emailLeader) {
         leader = leadersByEmail[emailLeader];
       }
@@ -700,8 +728,8 @@ export async function importAssignmentsFromExcelData(
           cargo_colaborador: cargoCollab || "—",
           documento_lider: docLeader || "—",
           nombre_lider: nameLeader || "—",
-          motivo: `Líder evaluador no encontrado con doc: "${docLeader}" o correo: "${emailLeader}" (debe tener rol de Líder en Usuarios)`,
-          accion_sugerida: "Verificar documento o correo del líder y asignarle el rol de Líder en Administración > Usuarios",
+          motivo: `Líder evaluador no encontrado con doc: "${docLeader}" o correo: "${emailLeader}" (debe existir en Usuarios)`,
+          accion_sugerida: "Verificar documento o correo del líder en Administración > Usuarios",
         });
         return;
       }
@@ -731,10 +759,18 @@ export async function importAssignmentsFromExcelData(
       };
     }
 
-    // 5. Upsert masivo
+    // 5. Deduplicar validRows por collaborator_id para evitar error en Postgres ON CONFLICT DO UPDATE command cannot affect row a second time
+    const dedupedRowsMap = new Map<string, any>();
+    validRows.forEach((row) => {
+      // El último registro del Excel prevalece en caso de repetición
+      dedupedRowsMap.set(row.collaborator_id, row);
+    });
+    const dedupedRows = Array.from(dedupedRowsMap.values());
+
+    // 6. Upsert masivo sin duplicados de clave primaria
     const { error: upsertError } = await adminClient
       .from("evaluation_assignments")
-      .upsert(validRows, { onConflict: "evaluation_year,collaborator_id" });
+      .upsert(dedupedRows, { onConflict: "evaluation_year,collaborator_id" });
 
     if (upsertError) {
       console.error("Error inserting excel assignments:", upsertError);
@@ -748,20 +784,24 @@ export async function importAssignmentsFromExcelData(
     }
 
     await logAudit(
-      "importacion_excel_asignaciones",
+      "crear",
       "evaluation_assignments",
-      userData.user.id,
-      `Importadas ${validRows.length} asignaciones desde archivo Excel para ciclo ${currentYear}`
+      undefined,
+      `[importacion_excel_asignaciones] Importadas ${dedupedRows.length} asignaciones desde archivo Excel para ciclo ${currentYear}`
     );
 
-    revalidatePath("/administracion/asignaciones");
-    revalidatePath("/evaluaciones");
-    revalidatePath("/reportes");
+    try {
+      revalidatePath("/administracion/asignaciones");
+      revalidatePath("/evaluaciones");
+      revalidatePath("/reportes");
+    } catch (revalErr) {
+      console.warn("Revalidation warning:", revalErr);
+    }
 
     return {
       success: true,
       totalRows: rows.length,
-      importedCount: validRows.length,
+      importedCount: dedupedRows.length,
       errorCount: errors.length,
       errors,
     };

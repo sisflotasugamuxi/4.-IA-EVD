@@ -563,8 +563,13 @@ export default function AsignacionesPage() {
         clearInterval(progressTimer);
         setImporting(false);
         setImportProgress(0);
-        console.error(err);
-        toast.error("Error al importar: " + (err?.message || "Error desconocido"));
+        console.error("Error al procesar importación:", err);
+        const errorMsg = err?.message || "";
+        if (errorMsg.includes("Server Components render") || errorMsg.includes("digest")) {
+          toast.error("Ocurrió un error en el servidor al procesar el archivo. Por favor verifica que las columnas del Excel sean válidas.");
+        } else {
+          toast.error("Error al importar: " + (errorMsg || "Error desconocido"));
+        }
       }
     };
     reader.readAsBinaryString(excelFile);

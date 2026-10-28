@@ -119,34 +119,76 @@ export async function getAuditLogs(limit = 200, filters?: {
 export async function logAudit(
   action: string,
   table_name: string,
-  record_id: string,
+  record_id?: string | null,
   description: string = "",
   old_values: any = null,
   new_values: any = null
 ) {
-  const supabase = await getSupabase();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) return;
+  try {
+    const supabase = await getSupabase();
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userData.user.id)
-    .single();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("company_id")
+      .eq("id", userData.user.id)
+      .single();
 
-  if (!profile?.company_id) return;
+    if (!profile?.company_id) return;
 
-  const adminClient = await getSupabaseAdmin();
-  await adminClient.from("audit_logs").insert({
-    company_id: profile.company_id,
-    user_id: userData.user.id,
-    action,
-    table_name,
-    record_id,
-    description,
-    old_values,
-    new_values,
-    ip_address: "127.0.0.1",
-    user_agent: "Next.js App"
-  });
+    // Normalizar acción para que coincida con el enum de Postgres audit_action:
+    // ('crear', 'editar', 'eliminar', 'finalizar', 'reabrir', 'correo_enviado', 'descarga_pdf', 'descarga_excel', 'cambio_configuracion', 'login', 'logout')
+    const VALID_ACTIONS = new Set([
+      "crear",
+      "editar",
+      "eliminar",
+      "finalizar",
+      "reabrir",
+      "correo_enviado",
+      "descarga_pdf",
+      "descarga_excel",
+      "cambio_configuracion",
+      "login",
+      "logout",
+    ]);
+
+    let safeAction = action?.toLowerCase().trim() || "crear";
+    let finalDescription = description || "";
+
+    if (!VALID_ACTIONS.has(safeAction)) {
+      if (safeAction.includes("eliminar") || safeAction.includes("borrar")) {
+        safeAction = "eliminar";
+      } else if (safeAction.includes("editar") || safeAction.includes("actualizar") || safeAction.includes("update")) {
+        safeAction = "editar";
+      } else if (safeAction.includes("config") || safeAction.includes("param")) {
+        safeAction = "cambio_configuracion";
+      } else {
+        safeAction = "crear";
+      }
+      finalDescription = `[${action}] ${finalDescription}`.trim();
+    }
+
+    // Validar si record_id es un UUID válido. Si no lo es, enviar null para evitar error 22P02 en Postgres
+    const isValidUUID = (id?: string | null) =>
+      Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
+    const safeRecordId = isValidUUID(record_id) ? record_id : null;
+
+    const adminClient = await getSupabaseAdmin();
+    await adminClient.from("audit_logs").insert({
+      company_id: profile.company_id,
+      user_id: userData.user.id,
+      action: safeAction,
+      table_name: table_name || "sistema",
+      record_id: safeRecordId,
+      description: finalDescription,
+      old_values,
+      new_values,
+      ip_address: "127.0.0.1",
+      user_agent: "Next.js App",
+    });
+  } catch (auditErr) {
+    console.warn("Non-fatal error in logAudit:", auditErr);
+  }
 }
