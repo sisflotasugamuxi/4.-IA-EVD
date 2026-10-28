@@ -550,17 +550,23 @@ export default function UsuariosPage() {
   const isAdmin = currentUserRole === "admin";
 
   const filtered = users.filter((u) => {
-    const term = search.toLowerCase();
-    const fullName = `${u.first_name} ${u.last_name}`.toLowerCase();
+    const term = search.trim().toLowerCase();
+    const fullName = `${u.first_name || ""} ${u.last_name || ""}`.toLowerCase();
+    const docNum = String(u.document_number || "").toLowerCase();
+    const docWithType = `${u.document_type || ""} ${u.document_number || ""}`.toLowerCase();
 
     // If the role is lider, they only see themselves
     if (currentUserRole === "lider" && currentUser && u.id !== currentUser.id) {
       return false;
     }
 
+    if (!term) return true;
+
     return (
       fullName.includes(term) ||
-      u.email.toLowerCase().includes(term) ||
+      docNum.includes(term) ||
+      docWithType.includes(term) ||
+      (u.email || "").toLowerCase().includes(term) ||
       (u.roles?.display_name || "").toLowerCase().includes(term) ||
       (u.positions?.name || "").toLowerCase().includes(term)
     );
@@ -580,13 +586,13 @@ export default function UsuariosPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="relative w-full sm:w-64">
+          <div className="relative w-full sm:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar usuario..."
+              placeholder="Buscar por nombre, documento, correo o cargo..."
               className="w-full h-10 pl-9 pr-4 text-sm rounded-xl border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>

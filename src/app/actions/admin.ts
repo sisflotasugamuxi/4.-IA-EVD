@@ -78,7 +78,37 @@ export async function getProfiles() {
     return { data: [], error: error.message };
   }
 
-  return { data, error: null };
+  // Enriquecer document_number desde collaborators si el perfil aún no lo tiene diligenciado
+  const { data: collabs } = await adminClient
+    .from("collaborators")
+    .select("id, email, document_type, document_number")
+    .eq("company_id", profile.company_id);
+
+  const collabById = new Map<string, any>();
+  const collabByEmail = new Map<string, any>();
+  (collabs || []).forEach((c: any) => {
+    if (c.id) collabById.set(c.id, c);
+    if (c.email) collabByEmail.set(c.email.trim().toLowerCase(), c);
+  });
+
+  const enrichedData = (data || []).map((p: any) => {
+    if (p.document_number && String(p.document_number).trim() !== "") {
+      return p;
+    }
+    const matchedCollab =
+      (p.collaborator_id && collabById.get(p.collaborator_id)) ||
+      (p.email && collabByEmail.get(String(p.email).trim().toLowerCase()));
+    if (matchedCollab?.document_number) {
+      return {
+        ...p,
+        document_type: p.document_type || matchedCollab.document_type || "CC",
+        document_number: matchedCollab.document_number,
+      };
+    }
+    return p;
+  });
+
+  return { data: enrichedData, error: null };
 }
 
 export async function updateProfile(userId: string, updates: {
