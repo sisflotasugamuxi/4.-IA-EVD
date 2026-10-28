@@ -1,7 +1,7 @@
 "use server";
 
 import { createServerClient } from "@supabase/ssr";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, syncProfilesToCollaborators } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { revalidatePath, unstable_noStore as noStore } from "next/cache";
 import { logAudit } from "./audit";
@@ -613,6 +613,9 @@ export async function importAssignmentsFromExcelData(
 
     if (!profile?.company_id) return { success: false, totalRows: 0, importedCount: 0, errors: [], error: "Compañía no encontrada" };
 
+    // Garantizar que los líderes/usuarios registrados en profiles con documento existan también en collaborators
+    await syncProfilesToCollaborators(adminClient);
+
     // 1. Cargar todos los colaboradores para mapear por número de documento
     const { data: collabs } = await adminClient
       .from("collaborators")
@@ -854,6 +857,8 @@ export async function getCollaboratorsWithAssignmentStatus(year?: number) {
   try {
     const adminClient = await getSupabaseAdmin();
     const currentYear = year || new Date().getFullYear();
+
+    await syncProfilesToCollaborators(adminClient);
 
     const [collabsRes, assignmentsRes] = await Promise.all([
       adminClient

@@ -40,6 +40,81 @@ export function createAdminClient() {
   });
 }
 
+/**
+ * Garantiza que todos los líderes y usuarios del sistema (profiles) con documento
+ * existan también en la tabla collaborators para que puedan ser evaluados por otros líderes.
+ */
+export async function syncProfilesToCollaborators(adminClient?: any) {
+  try {
+    const sb = adminClient || createAdminClient();
+    const cleanDoc = (d: any) =>
+      (d || "").toString().replace(/[^0-9a-zA-Z]/g, "").trim();
+
+    const [{ data: profiles }, { data: collabs }] = await Promise.all([
+      sb
+        .from("profiles")
+        .select(
+          "id, company_id, first_name, last_name, email, phone, position_id, document_type, document_number, active, collaborator_id"
+        ),
+      sb.from("collaborators").select("id, document_number"),
+    ]);
+
+    if (!profiles || profiles.length === 0) return;
+
+    const collabByDoc = new Map<string, string>();
+    (collabs || []).forEach((c: any) => {
+      const cd = cleanDoc(c.document_number);
+      if (cd) collabByDoc.set(cd, c.id);
+    });
+
+    const toInsert: any[] = [];
+    for (const p of profiles) {
+      const cd = cleanDoc(p.document_number);
+      if (!cd) continue;
+      if (collabByDoc.has(cd)) continue;
+
+      toInsert.push({
+        company_id: p.company_id || "11111111-0000-0000-0000-000000000001",
+        document_type: p.document_type || "CC",
+        document_number: p.document_number.toString().trim(),
+        first_name: (p.first_name || "").trim(),
+        last_name: (p.last_name || "").trim(),
+        email: p.email || null,
+        phone: p.phone || null,
+        position_id: p.position_id || null,
+        area_id: "c3d87931-05d5-47ec-8c9b-9aac0409d63c",
+        status: p.active === false ? "inactivo" : "activo",
+        active: p.active !== false,
+        hire_date: "2025-01-01",
+      });
+      // Evitar duplicados si dos perfiles comparten documento
+      collabByDoc.set(cd, "pending");
+    }
+
+    if (toInsert.length > 0) {
+      const { data: inserted } = await sb
+        .from("collaborators")
+        .insert(toInsert)
+        .select("id, document_number");
+
+      if (inserted && inserted.length > 0) {
+        for (const ins of inserted) {
+          const cd = cleanDoc(ins.document_number);
+          const prof = profiles.find((p: any) => cleanDoc(p.document_number) === cd);
+          if (prof && !prof.collaborator_id) {
+            await sb
+              .from("profiles")
+              .update({ collaborator_id: ins.id })
+              .eq("id", prof.id);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("syncProfilesToCollaborators warning:", err);
+  }
+}
+
 export async function createClient() {
   const cookieStore = await cookies();
 

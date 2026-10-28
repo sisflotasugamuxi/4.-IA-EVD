@@ -3,7 +3,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, syncProfilesToCollaborators } from "@/lib/supabase/server";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -121,7 +121,10 @@ export async function updateProfile(userId: string, updates: {
     return { error: error.message };
   }
 
+  await syncProfilesToCollaborators(adminClient);
+
   revalidatePath("/administracion/usuarios");
+  revalidatePath("/colaboradores");
   return { success: true };
 }
 
@@ -202,7 +205,10 @@ export async function inviteUser(data: {
     };
   }
 
+  await syncProfilesToCollaborators(adminClient);
+
   revalidatePath("/administracion/usuarios");
+  revalidatePath("/colaboradores");
   return { success: true };
 }
 
