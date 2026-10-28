@@ -389,6 +389,7 @@ export default function AsignacionesPage() {
     if (!file) return;
 
     setExcelFile(file);
+    setImportResult(null);
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
@@ -429,17 +430,35 @@ export default function AsignacionesPage() {
         const ws = wb.Sheets[wsname];
         const data: any[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
 
-        // Normalizar filas buscando columnas de documento de colaborador y documento o correo de líder
+        // Normalizar filas buscando columnas de documento, nombre, cargo de colaborador y líder
         const formattedRows = data.map((row) => {
-          // Búsqueda flexible de nombres de columna
           const docCollab =
             row["Documento Colaborador"] ||
             row["Documento"] ||
             row["Cédula Colaborador"] ||
             row["Cedula Colaborador"] ||
+            row["Cédula"] ||
+            row["Cedula"] ||
             row["doc_colaborador"] ||
             row["documento_colaborador"] ||
             row["Colaborador Documento"];
+
+          const nameCollab =
+            row["Nombre Colaborador (Opcional)"] ||
+            row["Nombre Colaborador"] ||
+            row["Nombre"] ||
+            row["Nombres"] ||
+            row["Colaborador"] ||
+            row["nombre_colaborador"] ||
+            row["Colaborador Nombre"];
+
+          const cargoCollab =
+            row["Cargo Colaborador (Opcional)"] ||
+            row["Cargo Colaborador"] ||
+            row["Cargo"] ||
+            row["cargo_colaborador"] ||
+            row["Posición"] ||
+            row["Posicion"];
 
           const docLeader =
             row["Documento Líder"] ||
@@ -450,6 +469,15 @@ export default function AsignacionesPage() {
             row["documento_lider"] ||
             row["Líder Documento"] ||
             row["Lider Documento"];
+
+          const nameLeader =
+            row["Nombre Líder (Opcional)"] ||
+            row["Nombre Líder"] ||
+            row["Nombre Lider"] ||
+            row["Líder"] ||
+            row["Lider"] ||
+            row["nombre_lider"] ||
+            row["Líder Nombre"];
 
           const emailLeader =
             row["Correo Líder"] ||
@@ -463,7 +491,10 @@ export default function AsignacionesPage() {
 
           return {
             doc_colaborador: docCollab ? docCollab.toString().trim() : "",
+            nombre_colaborador: nameCollab ? nameCollab.toString().trim() : undefined,
+            cargo_colaborador: cargoCollab ? cargoCollab.toString().trim() : undefined,
             doc_lider: docLeader ? docLeader.toString().trim() : "",
+            nombre_lider: nameLeader ? nameLeader.toString().trim() : undefined,
             email_lider: emailLeader ? emailLeader.toString().trim() : "",
             notas: notas ? notas.toString().trim() : undefined,
           };
@@ -486,6 +517,43 @@ export default function AsignacionesPage() {
       }
     };
     reader.readAsBinaryString(excelFile);
+  };
+
+  // Exportar Log de Errores / Filas no coincidentes a Excel
+  const handleExportErrorsToExcel = () => {
+    if (!importResult?.errors || importResult.errors.length === 0) {
+      toast.info("No hay errores o filas no coincidentes para exportar.");
+      return;
+    }
+
+    const exportRows = importResult.errors.map((err: any) => ({
+      "Fila Excel": err.fila,
+      "Documento Colaborador": err.documento_colaborador || "—",
+      "Nombre Colaborador": err.nombre_colaborador || "—",
+      "Cargo Colaborador": err.cargo_colaborador || "—",
+      "Documento Líder": err.documento_lider || "—",
+      "Nombre Líder": err.nombre_lider || "—",
+      "Motivo de la Novedad / Error": err.motivo || "—",
+      "Acción Sugerida": err.accion_sugerida || "Registrar colaborador o verificar en el sistema",
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportRows);
+    ws["!cols"] = [
+      { wch: 12 }, // Fila
+      { wch: 24 }, // Doc Colab
+      { wch: 35 }, // Nombre Colab
+      { wch: 30 }, // Cargo Colab
+      { wch: 20 }, // Doc Líder
+      { wch: 30 }, // Nombre Líder
+      { wch: 55 }, // Motivo
+      { wch: 45 }, // Acción Sugerida
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Log Errores Importación");
+    const fileName = `Log_Errores_Importacion_Asignaciones_${selectedYear}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    toast.success("Log de errores descargado en Excel con éxito.");
   };
 
   // Descargar Plantilla Oficial Excel
@@ -1848,8 +1916,8 @@ NOTIFY pgrst, 'reload schema';`;
 
       {/* MODAL 2: IMPORTAR DESDE EXCEL */}
       {showImportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in">
-          <div className="bg-card border rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-card border rounded-2xl shadow-2xl max-w-3xl w-full max-h-[92vh] overflow-hidden flex flex-col">
             <div className="p-5 border-b flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-base text-foreground">Importar Asignaciones desde Excel</h3>
@@ -1946,30 +2014,82 @@ NOTIFY pgrst, 'reload schema';`;
 
               {/* Reporte de Resultados de Importación */}
               {importResult && (
-                <div className={cn(
-                  "p-4 rounded-xl border text-xs space-y-2.5",
-                  importResult.success
-                    ? "bg-success-500/10 border-success-500/30 text-success-900 dark:text-success-200"
-                    : "bg-danger-500/10 border-danger-500/30 text-danger-900 dark:text-danger-200"
-                )}>
-                  <div className="flex items-center justify-between font-bold">
-                    <span>Resultado de la Carga:</span>
-                    <span>{importResult.importedCount} de {importResult.totalRows} filas válidas</span>
+                <div
+                  className={cn(
+                    "p-4 rounded-xl border text-xs space-y-3",
+                    importResult.success
+                      ? "bg-success-500/10 border-success-500/30 text-success-900 dark:text-success-200"
+                      : "bg-danger-500/10 border-danger-500/30 text-danger-900 dark:text-danger-200"
+                  )}
+                >
+                  <div className="flex items-center justify-between font-bold text-xs sm:text-sm">
+                    <span className="flex items-center gap-1.5">
+                      {importResult.success ? (
+                        <CheckCircle2 className="w-4 h-4 text-success-600" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-danger-600" />
+                      )}
+                      Resultado de la Carga:
+                    </span>
+                    <span>
+                      {importResult.importedCount} de {importResult.totalRows} filas válidas
+                    </span>
                   </div>
 
                   {importResult.errors && importResult.errors.length > 0 && (
-                    <div className="space-y-1.5 pt-2 border-t border-danger-500/20">
-                      <p className="font-bold text-danger-700 dark:text-danger-300 text-[11px]">
-                        Observaciones / Filas no coincidentes ({importResult.errors.length}):
-                      </p>
-                      <div className="max-h-28 overflow-y-auto space-y-1 text-[10px]">
-                        {importResult.errors.slice(0, 10).map((err: any, ei: number) => (
-                          <div key={ei} className="p-1 rounded bg-background/50 border border-danger-500/20">
-                            Fila {err.fila} · Doc: {err.documento_colaborador} — {err.motivo}
+                    <div className="space-y-2.5 pt-2 border-t border-danger-500/20">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <p className="font-bold text-danger-700 dark:text-danger-300 text-xs flex items-center gap-1.5">
+                          <AlertCircle className="w-4 h-4 text-danger-600 flex-shrink-0" />
+                          Observaciones / No coincidentes ({importResult.errors.length}):
+                        </p>
+
+                        {/* Botón para Descargar Log de Errores en Excel */}
+                        <button
+                          type="button"
+                          onClick={handleExportErrorsToExcel}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-danger-600 hover:bg-danger-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer self-start sm:self-auto"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Descargar Log en Excel (.xlsx)
+                        </button>
+                      </div>
+
+                      <div className="max-h-40 overflow-y-auto space-y-1.5 text-[11px] pr-1">
+                        {importResult.errors.slice(0, 20).map((err: any, ei: number) => (
+                          <div
+                            key={ei}
+                            className="p-2.5 rounded-lg bg-background/80 border border-danger-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-foreground">
+                                <span className="font-bold text-[#012169] dark:text-blue-300">Fila {err.fila}</span> · Doc:{" "}
+                                <strong className="font-mono text-danger-700 dark:text-danger-400">
+                                  {err.documento_colaborador}
+                                </strong>
+                                {err.nombre_colaborador && err.nombre_colaborador !== "—" && (
+                                  <span className="font-semibold text-foreground"> · {err.nombre_colaborador}</span>
+                                )}
+                                {err.cargo_colaborador && err.cargo_colaborador !== "—" && (
+                                  <span className="text-muted-foreground"> ({err.cargo_colaborador})</span>
+                                )}
+                              </p>
+                              <p className="text-[10px] text-danger-800 dark:text-danger-300 mt-0.5">
+                                {err.motivo}
+                              </p>
+                            </div>
+
+                            {err.accion_sugerida && (
+                              <span className="text-[10px] bg-amber-500/10 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-md font-medium whitespace-nowrap self-start sm:self-center flex-shrink-0">
+                                {err.accion_sugerida}
+                              </span>
+                            )}
                           </div>
                         ))}
-                        {importResult.errors.length > 10 && (
-                          <p className="text-[10px] text-muted-foreground">... y {importResult.errors.length - 10} errores más.</p>
+                        {importResult.errors.length > 20 && (
+                          <p className="text-[10px] text-muted-foreground text-center py-1 font-medium">
+                            ... y {importResult.errors.length - 20} observaciones más. Descarga el archivo Excel para ver el listado completo.
+                          </p>
                         )}
                       </div>
                     </div>
@@ -1978,22 +2098,44 @@ NOTIFY pgrst, 'reload schema';`;
               )}
             </div>
 
-            <div className="p-5 border-t flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowImportModal(false)}
-                className="px-4 py-2 rounded-xl border text-xs font-semibold hover:bg-accent transition-colors"
-              >
-                Cerrar
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmImport}
-                disabled={!excelFile || importing}
-                className="px-4 py-2 rounded-xl bg-slate-800 text-white text-xs font-semibold hover:bg-slate-900 disabled:opacity-50 transition-colors shadow-xs"
-              >
-                {importing ? "Procesando Excel..." : "Procesar e Importar Asignaciones"}
-              </button>
+            <div className="p-4 sm:p-5 border-t flex flex-col sm:flex-row items-center justify-between gap-2.5 bg-muted/20">
+              <div>
+                {importResult?.errors && importResult.errors.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleExportErrorsToExcel}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-danger-300 dark:border-danger-800 bg-card text-danger-700 dark:text-danger-300 hover:bg-danger-50 text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-danger-600" />
+                    Descargar Log de Errores ({importResult.errors.length})
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(false)}
+                  className="px-4 py-2 rounded-xl border text-xs font-semibold hover:bg-accent transition-colors cursor-pointer"
+                >
+                  Cerrar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmImport}
+                  disabled={!excelFile || importing}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-white text-xs font-semibold hover:bg-slate-900 disabled:opacity-50 transition-colors shadow-xs cursor-pointer flex items-center gap-2"
+                >
+                  {importing ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Procesando Excel...</span>
+                    </>
+                  ) : (
+                    <span>Procesar e Importar Asignaciones</span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

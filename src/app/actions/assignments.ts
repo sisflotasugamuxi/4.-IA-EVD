@@ -469,22 +469,45 @@ export async function deleteAssignment(id: string) {
   }
 }
 
+export interface ExcelAssignmentImportRow {
+  doc_colaborador: string;
+  nombre_colaborador?: string;
+  cargo_colaborador?: string;
+  doc_lider?: string;
+  nombre_lider?: string;
+  email_lider?: string;
+  notas?: string;
+}
+
+export interface ExcelImportErrorItem {
+  fila: number;
+  documento_colaborador: string;
+  nombre_colaborador?: string;
+  cargo_colaborador?: string;
+  documento_lider?: string;
+  nombre_lider?: string;
+  motivo: string;
+  accion_sugerida?: string;
+}
+
 /**
  * Importa asignaciones masivas desde datos leídos de Excel
  */
 export async function importAssignmentsFromExcelData(
-  rows: Array<{
-    doc_colaborador: string;
-    doc_lider?: string;
-    email_lider?: string;
-    notas?: string;
-  }>,
+  rows: ExcelAssignmentImportRow[],
   year?: number
-) {
+): Promise<{
+  success: boolean;
+  totalRows: number;
+  importedCount: number;
+  errorCount?: number;
+  errors: ExcelImportErrorItem[];
+  error?: string;
+}> {
   try {
     const supabase = await getSupabase();
     const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) return { error: "No autenticado" };
+    if (!userData.user) return { success: false, totalRows: 0, importedCount: 0, errors: [], error: "No autenticado" };
 
     const adminClient = await getSupabaseAdmin();
     const currentYear = year || new Date().getFullYear();
@@ -495,7 +518,7 @@ export async function importAssignmentsFromExcelData(
       .eq("id", userData.user.id)
       .single();
 
-    if (!profile?.company_id) return { error: "Compañía no encontrada" };
+    if (!profile?.company_id) return { success: false, totalRows: 0, importedCount: 0, errors: [], error: "Compañía no encontrada" };
 
     // 1. Cargar todos los colaboradores para mapear por número de documento
     const { data: collabs } = await adminClient
@@ -541,22 +564,43 @@ export async function importAssignmentsFromExcelData(
 
     // 4. Validar cada fila
     const validRows: any[] = [];
-    const errors: Array<{ fila: number; documento_colaborador: string; motivo: string }> = [];
+    const errors: ExcelImportErrorItem[] = [];
 
     rows.forEach((r, idx) => {
       const rowNum = idx + 2; // Considerando encabezado en fila 1
       const docCollab = (r.doc_colaborador || "").toString().trim();
       const docLeader = (r.doc_lider || "").toString().trim();
       const emailLeader = (r.email_lider || "").toString().toLowerCase().trim();
+      const nameCollab = (r.nombre_colaborador || "").toString().trim();
+      const cargoCollab = (r.cargo_colaborador || "").toString().trim();
+      const nameLeader = (r.nombre_lider || "").toString().trim();
 
       if (!docCollab) {
-        errors.push({ fila: rowNum, documento_colaborador: "Vacío", motivo: "Falta el documento del colaborador" });
+        errors.push({
+          fila: rowNum,
+          documento_colaborador: "Sin Documento",
+          nombre_colaborador: nameCollab || "—",
+          cargo_colaborador: cargoCollab || "—",
+          documento_lider: docLeader || "—",
+          nombre_lider: nameLeader || "—",
+          motivo: "Falta el número de documento del colaborador en esta fila",
+          accion_sugerida: "Completar la columna de documento del colaborador en el archivo Excel",
+        });
         return;
       }
 
       const collab = collabsByDoc[docCollab];
       if (!collab) {
-        errors.push({ fila: rowNum, documento_colaborador: docCollab, motivo: `Colaborador con documento ${docCollab} no existe en el sistema` });
+        errors.push({
+          fila: rowNum,
+          documento_colaborador: docCollab,
+          nombre_colaborador: nameCollab || "—",
+          cargo_colaborador: cargoCollab || "—",
+          documento_lider: docLeader || "—",
+          nombre_lider: nameLeader || "—",
+          motivo: `Colaborador con documento ${docCollab} no existe en el sistema`,
+          accion_sugerida: "Registrar al colaborador en el módulo de Colaboradores antes de asignarlo",
+        });
         return;
       }
 
@@ -569,7 +613,12 @@ export async function importAssignmentsFromExcelData(
         errors.push({
           fila: rowNum,
           documento_colaborador: docCollab,
-          motivo: `Líder evaluador no encontrado con doc: "${docLeader}" o correo: "${emailLeader}" (verificar que tenga rol de Líder/Jefe en el sistema)`,
+          nombre_colaborador: nameCollab || collab.name || "—",
+          cargo_colaborador: cargoCollab || "—",
+          documento_lider: docLeader || "—",
+          nombre_lider: nameLeader || "—",
+          motivo: `Líder evaluador no encontrado con doc: "${docLeader}" o correo: "${emailLeader}" (debe tener rol de Líder en Usuarios)`,
+          accion_sugerida: "Verificar documento o correo del líder y asignarle el rol de Líder en Administración > Usuarios",
         });
         return;
       }
@@ -606,7 +655,13 @@ export async function importAssignmentsFromExcelData(
 
     if (upsertError) {
       console.error("Error inserting excel assignments:", upsertError);
-      return { success: false, error: upsertError.message, errors };
+      return {
+        success: false,
+        totalRows: rows.length,
+        importedCount: 0,
+        errors,
+        error: upsertError.message,
+      };
     }
 
     await logAudit(
@@ -629,7 +684,13 @@ export async function importAssignmentsFromExcelData(
     };
   } catch (err: any) {
     console.error("Exception in importAssignmentsFromExcelData:", err);
-    return { success: false, error: err?.message || "Error al procesar el archivo Excel" };
+    return {
+      success: false,
+      totalRows: rows.length,
+      importedCount: 0,
+      errors: [],
+      error: err?.message || "Error al procesar el archivo Excel",
+    };
   }
 }
 
