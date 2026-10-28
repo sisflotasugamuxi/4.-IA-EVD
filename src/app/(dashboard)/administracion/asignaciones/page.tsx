@@ -583,13 +583,13 @@ CREATE TABLE IF NOT EXISTS public.evaluation_assignments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id UUID NOT NULL DEFAULT '11111111-0000-0000-0000-000000000001',
   evaluation_year INTEGER NOT NULL DEFAULT EXTRACT(YEAR FROM CURRENT_DATE),
-  version_id UUID REFERENCES public.evaluation_versions(id) ON DELETE SET NULL,
-  evaluator_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  collaborator_id UUID NOT NULL REFERENCES public.collaborators(id) ON DELETE CASCADE,
-  evaluation_id UUID REFERENCES public.evaluations(id) ON DELETE SET NULL,
+  version_id UUID,
+  evaluator_id UUID NOT NULL,
+  collaborator_id UUID NOT NULL,
+  evaluation_id UUID,
   status VARCHAR(50) NOT NULL DEFAULT 'pendiente',
   notes TEXT,
-  assigned_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  assigned_by UUID,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT unique_year_collaborator UNIQUE(evaluation_year, collaborator_id)
@@ -600,6 +600,37 @@ CREATE INDEX IF NOT EXISTS idx_eval_assignments_evaluator ON public.evaluation_a
 CREATE INDEX IF NOT EXISTS idx_eval_assignments_collab ON public.evaluation_assignments(collaborator_id);
 CREATE INDEX IF NOT EXISTS idx_eval_assignments_status ON public.evaluation_assignments(status);
 CREATE INDEX IF NOT EXISTS idx_eval_assignments_comp ON public.evaluation_assignments(company_id);
+
+DO $$
+BEGIN
+  BEGIN
+    ALTER TABLE public.evaluation_assignments
+      ADD CONSTRAINT fk_eval_assignments_evaluator
+      FOREIGN KEY (evaluator_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+
+  BEGIN
+    ALTER TABLE public.evaluation_assignments
+      ADD CONSTRAINT fk_eval_assignments_collaborator
+      FOREIGN KEY (collaborator_id) REFERENCES public.collaborators(id) ON DELETE CASCADE;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+
+  BEGIN
+    ALTER TABLE public.evaluation_assignments
+      ADD CONSTRAINT fk_eval_assignments_evaluation
+      FOREIGN KEY (evaluation_id) REFERENCES public.evaluations(id) ON DELETE SET NULL;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+
+  BEGIN
+    ALTER TABLE public.evaluation_assignments
+      ADD CONSTRAINT fk_eval_assignments_assigned_by
+      FOREIGN KEY (assigned_by) REFERENCES public.profiles(id) ON DELETE SET NULL;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+END $$;
 
 ALTER TABLE public.evaluation_assignments ENABLE ROW LEVEL SECURITY;
 
@@ -616,7 +647,9 @@ CREATE POLICY "Admin, RRHH y Gerencia pueden gestionar asignaciones" ON public.e
 );
 
 DROP POLICY IF EXISTS "Líderes pueden ver sus evaluaciones asignadas" ON public.evaluation_assignments;
-CREATE POLICY "Líderes pueden ver sus evaluaciones asignadas" ON public.evaluation_assignments FOR SELECT USING (evaluator_id = auth.uid());`;
+CREATE POLICY "Líderes pueden ver sus evaluaciones asignadas" ON public.evaluation_assignments FOR SELECT USING (evaluator_id = auth.uid());
+
+NOTIFY pgrst, 'reload schema';`;
 
   const copySqlToClipboard = () => {
     navigator.clipboard.writeText(sqlCodeToCopy);

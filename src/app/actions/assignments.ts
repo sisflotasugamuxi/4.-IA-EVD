@@ -80,15 +80,63 @@ export async function getEvaluationAssignments(filters?: {
 
     const { data, error } = await query.order("created_at", { ascending: false });
 
+    let result: EvaluationAssignment[] = [];
+
     if (error) {
-      if (error.code === "PGRST205" || error.message.includes("does not exist") || error.message.includes("schema cache")) {
+      if (
+        error.code === "PGRST205" ||
+        (error.message.includes("does not exist") && error.message.includes("evaluation_assignments"))
+      ) {
         return { data: [], tableNotCreated: true, error: "La tabla evaluation_assignments aún no ha sido creada en Supabase." };
       }
-      console.error("Error fetching evaluation assignments:", error);
-      return { data: [], error: error.message };
-    }
 
-    let result = (data || []) as unknown as EvaluationAssignment[];
+      // Si el error es por relaciones en el schema cache (PGRST200 / relationship)
+      if (error.message.includes("relationship") || error.code === "PGRST200" || error.message.includes("schema cache")) {
+        let simpleQuery = supabase
+          .from("evaluation_assignments")
+          .select("id, company_id, evaluation_year, version_id, evaluator_id, collaborator_id, evaluation_id, status, notes, assigned_by, created_at, updated_at")
+          .eq("evaluation_year", currentYear);
+
+        if (filters?.leaderId) {
+          simpleQuery = simpleQuery.eq("evaluator_id", filters.leaderId);
+        }
+        if (filters?.status && filters.status !== "todos") {
+          simpleQuery = simpleQuery.eq("status", filters.status);
+        }
+
+        const simpleRes = await simpleQuery.order("created_at", { ascending: false });
+
+        if (simpleRes.error) {
+          if (simpleRes.error.code === "PGRST205" || simpleRes.error.message.includes("does not exist")) {
+            return { data: [], tableNotCreated: true, error: "La tabla evaluation_assignments aún no ha sido creada en Supabase." };
+          }
+          return { data: [], error: simpleRes.error.message };
+        }
+
+        const assignmentsRaw = simpleRes.data || [];
+        if (assignmentsRaw.length > 0) {
+          const [evaluatorsRes, collabsRes] = await Promise.all([
+            supabase.from("profiles").select("id, first_name, last_name, email, document_number, phone, positions(id, name)"),
+            supabase.from("collaborators").select("id, first_name, last_name, full_name, document_number, email, status, areas(id, name), positions(id, name)")
+          ]);
+
+          const evMap = new Map((evaluatorsRes.data || []).map((e: any) => [e.id, e]));
+          const colMap = new Map((collabsRes.data || []).map((c: any) => [c.id, c]));
+
+          result = assignmentsRaw.map((item: any) => ({
+            ...item,
+            evaluator: evMap.get(item.evaluator_id) || null,
+            collaborator: colMap.get(item.collaborator_id) || null,
+            evaluation: null,
+          })) as EvaluationAssignment[];
+        }
+      } else {
+        console.error("Error fetching evaluation assignments:", error);
+        return { data: [], error: error.message };
+      }
+    } else {
+      result = (data || []) as unknown as EvaluationAssignment[];
+    }
 
     // Filtro de búsqueda en memoria (nombre o cédula)
     if (filters?.search && filters.search.trim()) {
@@ -648,8 +696,18 @@ export async function getCollaboratorsWithAssignmentStatus(year?: number) {
     ]);
 
     const assignmentsMap: Record<string, { evaluatorId: string; evaluatorName: string }> = {};
-    if (assignmentsRes.data) {
-      assignmentsRes.data.forEach((a: any) => {
+    let assignmentsRaw: any[] = assignmentsRes.data || [];
+
+    if (assignmentsRes.error && (assignmentsRes.error.message.includes("relationship") || assignmentsRes.error.code === "PGRST200")) {
+      const fallbackAssignments = await adminClient
+        .from("evaluation_assignments")
+        .select("collaborator_id, evaluator_id")
+        .eq("evaluation_year", currentYear);
+      assignmentsRaw = fallbackAssignments.data || [];
+    }
+
+    if (assignmentsRaw.length > 0) {
+      assignmentsRaw.forEach((a: any) => {
         const evName = a.evaluator ? `${a.evaluator.first_name || ""} ${a.evaluator.last_name || ""}`.trim() : "Líder Asignado";
         assignmentsMap[a.collaborator_id] = { evaluatorId: a.evaluator_id, evaluatorName: evName };
       });
