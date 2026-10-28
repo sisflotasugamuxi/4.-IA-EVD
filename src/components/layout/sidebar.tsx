@@ -52,6 +52,7 @@ const navGroups: NavGroup[] = [
           { title: "Nueva Evaluación", href: "/evaluaciones/nueva", icon: ClipboardPlus },
           { title: "Resultados Evaluaciones", href: "/evaluaciones", icon: ClipboardCheck },
           { title: "Firmas Pendientes", href: "/evaluaciones/firmas-pendientes", icon: PenTool },
+          { title: "Asignación Evaluaciones", href: "/administracion/asignaciones", icon: UserCheck },
         ],
       },
       {
@@ -86,7 +87,6 @@ const navGroups: NavGroup[] = [
         children: [
           { title: "Usuarios", href: "/administracion/usuarios", icon: Users },
           { title: "Roles", href: "/administracion/roles", icon: Shield },
-          { title: "Asignación Evaluaciones", href: "/administracion/asignaciones", icon: UserCheck },
           { title: "Áreas", href: "/administracion/areas", icon: Building2 },
           { title: "Cargos", href: "/administracion/cargos", icon: BookOpen },
           { title: "Importar Datos", href: "/administracion/importar", icon: FileBarChart2 },
@@ -194,20 +194,27 @@ export function Sidebar({ collapsed, onToggle, onItemClick, userRole, userPermis
 
       return true;
     }).map(item => {
-      // Filtrar sub-elementos según permisos de creación
-      if (item.children && userPermissions && userRole !== "admin") {
-        const modName = ITEM_MODULE_MAP[item.title];
-        const perm = modName ? userPermissions[modName] : null;
+      if (item.children) {
+        let updatedChildren = [...item.children];
 
-        if (perm) {
-          let updatedChildren = [...item.children];
-          if (perm.can_create === false) {
+        // "Asignación Evaluaciones" (debajo de Firmas Pendientes) solo para Gestión Humana (rrhh) y Administrador (admin)
+        if (userRole !== "admin" && userRole !== "rrhh") {
+          updatedChildren = updatedChildren.filter(c => c.title !== "Asignación Evaluaciones");
+        }
+
+        // Filtrar sub-elementos según permisos de creación
+        if (userPermissions && userRole !== "admin") {
+          const modName = ITEM_MODULE_MAP[item.title];
+          const perm = modName ? userPermissions[modName] : null;
+
+          if (perm && perm.can_create === false) {
             updatedChildren = updatedChildren.filter(c => 
               c.title !== "Nuevo Colaborador" && c.title !== "Nueva Evaluación"
             );
           }
-          return { ...item, children: updatedChildren };
         }
+
+        return { ...item, children: updatedChildren };
       }
       return item;
     });

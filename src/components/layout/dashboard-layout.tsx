@@ -99,6 +99,9 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
     if (path.startsWith("/configuracion")) {
       return { module: "configuracion", sectionName: "Configuración" };
     }
+    if (path.startsWith("/administracion/asignaciones")) {
+      return { module: "evaluaciones", sectionName: "Asignación Evaluaciones" };
+    }
     if (path.startsWith("/administracion")) {
       if (userRole === "lider" && path.startsWith("/administracion/usuarios")) {
         return null;
