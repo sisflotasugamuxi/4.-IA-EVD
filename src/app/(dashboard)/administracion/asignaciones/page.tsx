@@ -15,6 +15,7 @@ import * as XLSX from "xlsx";
 import { cn, formatScore } from "@/lib/utils";
 import {
   getEvaluationAssignments,
+  getEvaluationAssignmentsDashboard,
   getAssignmentsSummaryByLeader,
   getAssignmentsStats,
   createOrUpdateAssignment,
@@ -109,44 +110,45 @@ export default function AsignacionesPage() {
     }, 150);
 
     try {
-      const [resAssignments, resSummaries, resStats] = await Promise.all([
-        getEvaluationAssignments({ year: selectedYear }),
-        getAssignmentsSummaryByLeader(selectedYear),
-        getAssignmentsStats(selectedYear)
-      ]);
+      const res = await getEvaluationAssignmentsDashboard(selectedYear);
 
       clearInterval(progressTimer);
       setLoadProgress(100);
 
-      if (resAssignments.tableNotCreated) {
+      if (res.tableNotCreated) {
         setTableNotCreated(true);
         setTimeout(() => setLoading(false), 200);
         return;
       }
 
+      if (res.error) {
+        console.error("Dashboard response error:", res.error);
+        toast.error("Observación al cargar asignaciones: " + res.error);
+      }
+
       setTableNotCreated(false);
-      setAssignments(resAssignments.data || []);
-      setLeaderSummaries(resSummaries.data || []);
-      setStats({
-        totalAssignments: resStats.totalAssignments || 0,
-        totalCompleted: resStats.totalCompleted || 0,
-        totalPendingSignature: resStats.totalPendingSignature || 0,
-        totalInProgress: resStats.totalInProgress || 0,
-        totalPending: resStats.totalPending || 0,
-        totalLeaders: resStats.totalLeaders || 0,
-        overallCompletion: resStats.overallCompletion || 0,
+      setAssignments(res.assignments || []);
+      setLeaderSummaries(res.summaries || []);
+      setStats(res.stats || {
+        totalAssignments: 0,
+        totalCompleted: 0,
+        totalPendingSignature: 0,
+        totalInProgress: 0,
+        totalPending: 0,
+        totalLeaders: 0,
+        overallCompletion: 0,
       });
 
       // Expandir por defecto los primeros líderes
       const initialExpanded: Record<string, boolean> = {};
-      (resSummaries.data || []).slice(0, 3).forEach((l) => {
-        initialExpanded[l.leaderId] = true;
+      (res.summaries || []).slice(0, 3).forEach((l) => {
+        if (l.leaderId) initialExpanded[l.leaderId] = true;
       });
       setExpandedLeaders(initialExpanded);
-    } catch (err) {
+    } catch (err: any) {
       clearInterval(progressTimer);
-      console.error(err);
-      toast.error("Error al cargar asignaciones de evaluación");
+      console.error("Error en loadData asignaciones:", err);
+      toast.error("Error al cargar asignaciones: " + (err?.message || "Error desconocido"));
     } finally {
       setTimeout(() => setLoading(false), 200);
     }

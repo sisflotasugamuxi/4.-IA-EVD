@@ -158,6 +158,148 @@ export async function getEvaluationAssignments(filters?: {
 }
 
 /**
+ * Obtiene todos los datos consolidados del dashboard de asignaciones en una sola consulta
+ */
+export async function getEvaluationAssignmentsDashboard(year?: number): Promise<{
+  assignments: EvaluationAssignment[];
+  summaries: AssignmentLeaderSummary[];
+  stats: {
+    totalAssignments: number;
+    totalCompleted: number;
+    totalPendingSignature: number;
+    totalInProgress: number;
+    totalPending: number;
+    totalLeaders: number;
+    overallCompletion: number;
+  };
+  tableNotCreated?: boolean;
+  error?: string;
+}> {
+  noStore();
+  const emptyStats = {
+    totalAssignments: 0,
+    totalCompleted: 0,
+    totalPendingSignature: 0,
+    totalInProgress: 0,
+    totalPending: 0,
+    totalLeaders: 0,
+    overallCompletion: 0,
+  };
+
+  try {
+    const res = await getEvaluationAssignments({ year });
+    if (res.tableNotCreated) {
+      return {
+        assignments: [],
+        summaries: [],
+        stats: emptyStats,
+        tableNotCreated: true,
+        error: res.error,
+      };
+    }
+    if (res.error) {
+      return {
+        assignments: [],
+        summaries: [],
+        stats: emptyStats,
+        error: res.error,
+      };
+    }
+
+    const items = res.data || [];
+
+    // 1. Agrupar por líder
+    const byLeader: Record<string, AssignmentLeaderSummary> = {};
+
+    items.forEach((item) => {
+      const leader = item.evaluator;
+      const leaderId = item.evaluator_id || "sin_lider";
+      if (!byLeader[leaderId]) {
+        const fullName = leader ? `${leader.first_name || ""} ${leader.last_name || ""}`.trim() : "Líder Desconocido";
+        const posName = Array.isArray(leader?.positions) ? leader?.positions[0]?.name : leader?.positions?.name;
+        byLeader[leaderId] = {
+          leaderId,
+          leaderName: fullName || "Sin Nombre",
+          leaderEmail: leader?.email || "—",
+          leaderPosition: posName || "Sin Cargo",
+          totalAssigned: 0,
+          finalizedCount: 0,
+          pendingCount: 0,
+          inProgressCount: 0,
+          pendingSignatureCount: 0,
+          completionPercentage: 0,
+          averageScore: 0,
+          assignments: [],
+        };
+      }
+
+      const current = byLeader[leaderId];
+      current.totalAssigned += 1;
+      current.assignments.push(item);
+
+      const st = (item.status || "").toLowerCase();
+      if (st === "finalizada") current.finalizedCount += 1;
+      else if (st === "pendiente_firma") current.pendingSignatureCount += 1;
+      else if (st === "en_proceso") current.inProgressCount += 1;
+      else current.pendingCount += 1;
+    });
+
+    const summaries = Object.values(byLeader).map((l) => {
+      const completed = l.finalizedCount;
+      l.completionPercentage = l.totalAssigned > 0 ? Math.round((completed / l.totalAssigned) * 100) : 0;
+
+      let scoreSum = 0;
+      let scoreCount = 0;
+      l.assignments.forEach((a) => {
+        const resObj = Array.isArray(a.evaluation?.result) ? a.evaluation.result[0] : a.evaluation?.result;
+        const avg = resObj?.overall_average;
+        if (avg != null && Number(avg) > 0) {
+          scoreSum += Number(avg);
+          scoreCount += 1;
+        }
+      });
+      l.averageScore = scoreCount > 0 ? Number((scoreSum / scoreCount).toFixed(2)) : 0;
+      return l;
+    });
+
+    summaries.sort((a, b) => (a.leaderName || "").localeCompare(b.leaderName || ""));
+
+    // 2. Métricas globales
+    const total = items.length;
+    const completed = items.filter((i) => i.status === "finalizada").length;
+    const pendingSig = items.filter((i) => i.status === "pendiente_firma").length;
+    const inProgress = items.filter((i) => i.status === "en_proceso").length;
+    const pending = items.filter((i) => !i.status || i.status === "pendiente").length;
+    const distinctLeaders = new Set(items.map((i) => i.evaluator_id)).size;
+    const overallCompletion = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    const stats = {
+      totalAssignments: total,
+      totalCompleted: completed,
+      totalPendingSignature: pendingSig,
+      totalInProgress: inProgress,
+      totalPending: pending,
+      totalLeaders: distinctLeaders,
+      overallCompletion,
+    };
+
+    return {
+      assignments: items,
+      summaries,
+      stats,
+    };
+  } catch (err: any) {
+    console.error("Exception in getEvaluationAssignmentsDashboard:", err);
+    return {
+      assignments: [],
+      summaries: [],
+      stats: emptyStats,
+      error: err?.message || "Error al procesar resumen de asignaciones",
+    };
+  }
+}
+
+/**
  * Obtiene el resumen consolidado agrupado por líder
  */
 export async function getAssignmentsSummaryByLeader(year?: number): Promise<{
@@ -166,70 +308,19 @@ export async function getAssignmentsSummaryByLeader(year?: number): Promise<{
   error?: string;
 }> {
   noStore();
-  const res = await getEvaluationAssignments({ year });
-  if (res.tableNotCreated) {
-    return { data: [], tableNotCreated: true, error: res.error };
-  }
-  if (res.error) {
-    return { data: [], error: res.error };
-  }
-
-  const byLeader: Record<string, AssignmentLeaderSummary> = {};
-
-  (res.data || []).forEach((item) => {
-    const leader = item.evaluator;
-    const leaderId = item.evaluator_id;
-    if (!byLeader[leaderId]) {
-      const fullName = leader ? `${leader.first_name || ""} ${leader.last_name || ""}`.trim() : "Líder Desconocido";
-      const posName = Array.isArray(leader?.positions) ? leader?.positions[0]?.name : leader?.positions?.name;
-      byLeader[leaderId] = {
-        leaderId,
-        leaderName: fullName,
-        leaderEmail: leader?.email || "—",
-        leaderPosition: posName || "Sin Cargo",
-        totalAssigned: 0,
-        finalizedCount: 0,
-        pendingCount: 0,
-        inProgressCount: 0,
-        pendingSignatureCount: 0,
-        completionPercentage: 0,
-        averageScore: 0,
-        assignments: [],
-      };
+  try {
+    const dash = await getEvaluationAssignmentsDashboard(year);
+    if (dash.tableNotCreated) {
+      return { data: [], tableNotCreated: true, error: dash.error };
     }
-
-    const current = byLeader[leaderId];
-    current.totalAssigned += 1;
-    current.assignments.push(item);
-
-    const st = (item.status || "").toLowerCase();
-    if (st === "finalizada") current.finalizedCount += 1;
-    else if (st === "pendiente_firma") current.pendingSignatureCount += 1;
-    else if (st === "en_proceso") current.inProgressCount += 1;
-    else current.pendingCount += 1;
-  });
-
-  // Calcular porcentajes y promedios
-  const summaryList = Object.values(byLeader).map((l) => {
-    const completed = l.finalizedCount;
-    l.completionPercentage = l.totalAssigned > 0 ? Math.round((completed / l.totalAssigned) * 100) : 0;
-
-    let scoreSum = 0;
-    let scoreCount = 0;
-    l.assignments.forEach((a) => {
-      const avg = a.evaluation?.result?.overall_average;
-      if (avg != null && Number(avg) > 0) {
-        scoreSum += Number(avg);
-        scoreCount += 1;
-      }
-    });
-    l.averageScore = scoreCount > 0 ? Number((scoreSum / scoreCount).toFixed(2)) : 0;
-    return l;
-  });
-
-  summaryList.sort((a, b) => a.leaderName.localeCompare(b.leaderName));
-
-  return { data: summaryList };
+    if (dash.error) {
+      return { data: [], error: dash.error };
+    }
+    return { data: dash.summaries };
+  } catch (err: any) {
+    console.error("Error in getAssignmentsSummaryByLeader:", err);
+    return { data: [], error: err?.message || "Error al agrupar por líder" };
+  }
 }
 
 /**
@@ -237,39 +328,31 @@ export async function getAssignmentsSummaryByLeader(year?: number): Promise<{
  */
 export async function getAssignmentsStats(year?: number) {
   noStore();
-  const res = await getEvaluationAssignments({ year });
-  if (res.tableNotCreated) {
-    return {
-      tableNotCreated: true,
-      totalAssignments: 0,
-      totalCompleted: 0,
-      totalPendingSignature: 0,
-      totalInProgress: 0,
-      totalPending: 0,
-      totalLeaders: 0,
-      overallCompletion: 0,
-    };
-  }
-
-  const items = res.data || [];
-  const total = items.length;
-  const completed = items.filter((i) => i.status === "finalizada").length;
-  const pendingSig = items.filter((i) => i.status === "pendiente_firma").length;
-  const inProgress = items.filter((i) => i.status === "en_proceso").length;
-  const pending = items.filter((i) => !i.status || i.status === "pendiente").length;
-  const distinctLeaders = new Set(items.map((i) => i.evaluator_id)).size;
-  const overallCompletion = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-  return {
+  const emptyStats = {
     tableNotCreated: false,
-    totalAssignments: total,
-    totalCompleted: completed,
-    totalPendingSignature: pendingSig,
-    totalInProgress: inProgress,
-    totalPending: pending,
-    totalLeaders: distinctLeaders,
-    overallCompletion,
+    totalAssignments: 0,
+    totalCompleted: 0,
+    totalPendingSignature: 0,
+    totalInProgress: 0,
+    totalPending: 0,
+    totalLeaders: 0,
+    overallCompletion: 0,
   };
+
+  try {
+    const dash = await getEvaluationAssignmentsDashboard(year);
+    if (dash.tableNotCreated) {
+      return { ...emptyStats, tableNotCreated: true, error: dash.error };
+    }
+    return {
+      ...dash.stats,
+      tableNotCreated: false,
+      error: dash.error,
+    };
+  } catch (err: any) {
+    console.error("Error in getAssignmentsStats:", err);
+    return { ...emptyStats, error: err?.message };
+  }
 }
 
 /**
