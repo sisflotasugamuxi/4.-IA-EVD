@@ -3,6 +3,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { verifyUserPermission } from "./admin";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -43,6 +44,9 @@ export async function getAreas() {
 }
 
 export async function createArea(areaData: any) {
+  const permCheck = await verifyUserPermission("administracion", "can_create");
+  if (!permCheck.allowed) return { error: permCheck.error || "No tienes permisos para crear áreas." };
+
   const supabase = await getSupabase();
   
   // Obtener la empresa del usuario actual
@@ -70,6 +74,9 @@ export async function updateArea(areaId: string, areaData: {
   code?: string;
   description?: string;
 }) {
+  const permCheck = await verifyUserPermission("administracion", "can_edit");
+  if (!permCheck.allowed) return { error: permCheck.error || "No tienes permisos para editar áreas." };
+
   const supabase = await getSupabase();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { error: "No autenticado" };
@@ -85,6 +92,9 @@ export async function updateArea(areaId: string, areaData: {
 }
 
 export async function deleteArea(areaId: string) {
+  const permCheck = await verifyUserPermission("administracion", "can_delete");
+  if (!permCheck.allowed) return { error: permCheck.error || "No tienes permisos para eliminar áreas." };
+
   const supabase = await getSupabase();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { error: "No autenticado" };
@@ -127,6 +137,9 @@ export async function getPositions() {
 }
 
 export async function createPosition(positionData: any) {
+  const permCheck = await verifyUserPermission("administracion", "can_create");
+  if (!permCheck.allowed) return { error: permCheck.error || "No tienes permisos para crear cargos." };
+
   const supabase = await getSupabase();
   
   const { data: userData } = await supabase.auth.getUser();
@@ -155,6 +168,9 @@ export async function updatePosition(positionId: string, positionData: {
   area_id?: string;
   level?: number;
 }) {
+  const permCheck = await verifyUserPermission("administracion", "can_edit");
+  if (!permCheck.allowed) return { error: permCheck.error || "No tienes permisos para editar cargos." };
+
   const supabase = await getSupabase();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { error: "No autenticado" };
@@ -170,6 +186,9 @@ export async function updatePosition(positionId: string, positionData: {
 }
 
 export async function deletePosition(positionId: string) {
+  const permCheck = await verifyUserPermission("administracion", "can_delete");
+  if (!permCheck.allowed) return { error: permCheck.error || "No tienes permisos para eliminar cargos." };
+
   const supabase = await getSupabase();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { error: "No autenticado" };

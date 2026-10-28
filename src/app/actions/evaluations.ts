@@ -6,6 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { revalidatePath, unstable_noStore as noStore } from "next/cache";
 import { Resend } from "resend";
 import { logAudit } from "./audit";
+import { verifyUserPermission } from "./admin";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -112,6 +113,9 @@ export async function saveCategory(category: {
   is_critical?: boolean;
   min_score_required?: number;
 }) {
+  const permCheck = await verifyUserPermission("configuracion", category.id ? "can_edit" : "can_create");
+  if (!permCheck.allowed) return { error: permCheck.error || "No tienes permisos para modificar categorías en Configuración." };
+
   const supabase = await getSupabaseAdmin();
   const version = await getActiveVersion();
   if (!version) return { error: "No hay versión de evaluación activa" };
@@ -159,6 +163,9 @@ export async function saveCategory(category: {
 }
 
 export async function deleteCategory(id: string) {
+  const permCheck = await verifyUserPermission("configuracion", "can_delete");
+  if (!permCheck.allowed) return { error: permCheck.error || "No tienes permisos para eliminar categorías en Configuración." };
+
   const supabase = await getSupabaseAdmin();
   const { error } = await supabase
     .from("evaluation_categories")
@@ -185,6 +192,9 @@ export async function saveQuestion(question: {
   min_score_required: number;
   weight: number;
 }) {
+  const permCheck = await verifyUserPermission("configuracion", question.id ? "can_edit" : "can_create");
+  if (!permCheck.allowed) return { error: permCheck.error || "No tienes permisos para modificar preguntas en Configuración." };
+
   const supabase = await getSupabaseAdmin();
   const version = await getActiveVersion();
   if (!version) return { error: "No hay versión de evaluación activa" };
@@ -238,6 +248,9 @@ export async function saveQuestion(question: {
 }
 
 export async function deleteQuestion(id: string) {
+  const permCheck = await verifyUserPermission("configuracion", "can_delete");
+  if (!permCheck.allowed) return { error: permCheck.error || "No tienes permisos para eliminar preguntas en Configuración." };
+
   const supabase = await getSupabaseAdmin();
   const { error } = await supabase
     .from("evaluation_questions")
@@ -792,6 +805,9 @@ export async function saveEvaluationVersion(version: {
   approved_threshold?: number;
   pmi_threshold?: number;
 }) {
+  const permCheck = await verifyUserPermission("configuracion", version.id ? "can_edit" : "can_create");
+  if (!permCheck.allowed) return { error: permCheck.error || "No tienes permisos para gestionar versiones en Configuración." };
+
   const supabase = await getSupabaseAdmin();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { error: "No autenticado" };
@@ -850,6 +866,9 @@ export async function saveEvaluationVersion(version: {
 }
 
 export async function cloneEvaluationVersion(versionId: string) {
+  const permCheck = await verifyUserPermission("configuracion", "can_create");
+  if (!permCheck.allowed) return { error: permCheck.error || "No tienes permisos para duplicar versiones en Configuración." };
+
   const supabase = await getSupabaseAdmin();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { error: "No autenticado" };

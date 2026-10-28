@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { usePathname, useRouter } from "next/navigation";
 import { AlertCircle } from "lucide-react";
+import { getCurrentUserRoleAndPermissions, UserPermissionItem } from "@/app/actions/admin";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -17,6 +18,9 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children, title }: DashboardLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string>("");
+  const [roleDisplayName, setRoleDisplayName] = useState<string>("");
+  const [userPermissions, setUserPermissions] = useState<Record<string, UserPermissionItem>>({});
   const [isLoading, setIsLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
@@ -60,70 +64,109 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
     };
   }, []);
 
-  useEffect(() => {
-    async function checkRole() {
-      try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select(`
-              *,
-              roles(id, name, display_name)
-            `)
-            .eq("id", user.id)
-            .single();
-
-          if (profile) {
-            setUserProfile(profile);
-          }
-        }
-      } catch (err) {
-        console.error("Error checking role in layout:", err);
-      } finally {
-        setIsLoading(false);
+  const loadRoleAndPermissions = async () => {
+    try {
+      const res = await getCurrentUserRoleAndPermissions();
+      if (res.profile) {
+        setUserProfile(res.profile);
       }
+      if (res.role) {
+        setUserRole(res.role.name);
+        setRoleDisplayName(res.role.display_name);
+      }
+      if (res.permissions) {
+        setUserPermissions(res.permissions);
+      }
+    } catch (err) {
+      console.error("Error checking role and permissions in layout:", err);
+    } finally {
+      setIsLoading(false);
     }
-    checkRole();
-  }, []);
-
-  const ROLE_MAP: Record<string, { name: string; display_name: string }> = {
-    "22222222-0000-0000-0000-000000000001": { name: "admin", display_name: "Administrador" },
-    "22222222-0000-0000-0000-000000000002": { name: "rrhh", display_name: "Gestión Humana" },
-    "22222222-0000-0000-0000-000000000003": { name: "gerencia", display_name: "Gerencia" },
-    "22222222-0000-0000-0000-000000000004": { name: "lider", display_name: "Líder / Jefe" },
-    "22222222-0000-0000-0000-000000000005": { name: "colaborador", display_name: "Colaborador" }
   };
 
-  const roleInfo = userProfile?.role_id ? ROLE_MAP[userProfile.role_id] : null;
-  const userRole = roleInfo?.name || userProfile?.roles?.name;
-  const isRestrictedPath = 
-    (pathname.startsWith("/administracion") && !(userRole === "lider" && pathname.startsWith("/administracion/usuarios"))) || 
-    pathname.startsWith("/configuracion") || 
-    pathname.startsWith("/auditoria") ||
-    (userRole === "colaborador" && (pathname.startsWith("/colaboradores") || pathname.startsWith("/evaluaciones")));
+  useEffect(() => {
+    loadRoleAndPermissions();
+
+    const handlePermUpdate = () => {
+      loadRoleAndPermissions();
+    };
+    window.addEventListener("permissions-updated", handlePermUpdate);
+    return () => window.removeEventListener("permissions-updated", handlePermUpdate);
+  }, []);
+
+  // Determinar módulo y nombre de sección basado en la ruta actual
+  const getModuleInfo = (path: string): { module: string; sectionName: string } | null => {
+    if (path.startsWith("/configuracion")) {
+      return { module: "configuracion", sectionName: "Configuración" };
+    }
+    if (path.startsWith("/administracion")) {
+      if (userRole === "lider" && path.startsWith("/administracion/usuarios")) {
+        return null;
+      }
+      return { module: "administracion", sectionName: "Administración" };
+    }
+    if (path.startsWith("/auditoria")) {
+      return { module: "auditoria", sectionName: "Auditoría" };
+    }
+    if (path.startsWith("/reportes")) {
+      return { module: "reportes", sectionName: "Reportes" };
+    }
+    if (path.startsWith("/colaboradores")) {
+      return { module: "colaboradores", sectionName: "Colaboradores" };
+    }
+    if (path.startsWith("/evaluaciones")) {
+      return { module: "evaluaciones", sectionName: "Evaluaciones" };
+    }
+    if (path.startsWith("/pmi")) {
+      return { module: "pmi", sectionName: "Planes de Mejora (PMI)" };
+    }
+    return null;
+  };
+
+  const moduleInfo = getModuleInfo(pathname);
+  const isSuperAdmin = userRole === "admin";
+
+  let isRestricted = false;
+  let restrictedReason = "";
+
+  if (!isSuperAdmin && moduleInfo) {
+    const perm = userPermissions[moduleInfo.module];
+
+    // 1. Si en la base de datos se configuró can_view = false para este módulo
+    if (perm && perm.can_view === false) {
+      isRestricted = true;
+      restrictedReason = `Tu rol de ${roleDisplayName || userRole || "usuario"} no tiene permisos para visualizar ni editar la sección de ${moduleInfo.sectionName}.`;
+    } 
+    // 2. Restricción si es ruta de creación (/nuevo, /nueva) y can_create = false
+    else if (perm && perm.can_create === false && (pathname === "/colaboradores/nuevo" || pathname === "/evaluaciones/nueva")) {
+      isRestricted = true;
+      restrictedReason = `Tu rol de ${roleDisplayName || userRole || "usuario"} no tiene permisos para crear nuevos registros en la sección de ${moduleInfo.sectionName}.`;
+    }
+    // 3. Restricción si es ruta de edición (/editar) y can_edit = false
+    else if (perm && perm.can_edit === false && pathname.endsWith("/editar")) {
+      isRestricted = true;
+      restrictedReason = `Tu rol de ${roleDisplayName || userRole || "usuario"} no tiene permisos para editar registros en la sección de ${moduleInfo.sectionName}.`;
+    }
+    // 4. Reglas de compatibilidad históricas si aún no hay permisos cargados en la BD
+    else if (userRole === "colaborador" && (moduleInfo.module === "colaboradores" || moduleInfo.module === "evaluaciones" || moduleInfo.module === "administracion" || moduleInfo.module === "configuracion" || moduleInfo.module === "auditoria")) {
+      isRestricted = true;
+      restrictedReason = `Tu rol de ${roleDisplayName || "Colaborador"} no tiene permisos para acceder a esta sección.`;
+    } else if (userRole === "lider" && (moduleInfo.module === "configuracion" || moduleInfo.module === "auditoria" || (moduleInfo.module === "administracion" && !pathname.startsWith("/administracion/usuarios")))) {
+      isRestricted = true;
+      restrictedReason = `Tu rol de ${roleDisplayName || "Líder"} no tiene permisos para acceder a ${moduleInfo.sectionName}.`;
+    }
+  }
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
         <div className="w-8 h-8 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" />
-        <p className="text-muted-foreground text-sm font-medium">Validando credenciales...</p>
+        <p className="text-muted-foreground text-sm font-medium">Validando credenciales y permisos...</p>
       </div>
     );
   }
 
-  if (isRestrictedPath && (userRole === "lider" || userRole === "colaborador")) {
-    const sectionName = pathname.startsWith("/administracion") 
-      ? "Administración" 
-      : pathname.startsWith("/configuracion") 
-        ? "Configuración" 
-        : pathname.startsWith("/auditoria")
-          ? "Auditoría"
-          : pathname.startsWith("/colaboradores")
-            ? "Colaboradores"
-            : "Evaluaciones";
-
+  if (isRestricted) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="bg-card border border-danger-200 dark:border-danger-900/30 p-8 rounded-2xl shadow-xl max-w-md w-full text-center space-y-6">
@@ -133,7 +176,7 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
           <div className="space-y-2">
             <h2 className="text-xl font-bold text-danger-700 dark:text-danger-300">Acceso Restringido</h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Tu rol de <strong>{userProfile?.roles?.display_name || "Líder / Jefe"}</strong> no tiene permisos para visualizar ni editar la sección de <strong>{sectionName}</strong>.
+              {restrictedReason}
             </p>
           </div>
           <button
@@ -161,6 +204,7 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
         onItemClick={() => setSidebarCollapsed(true)}
         userRole={userRole}
+        userPermissions={userPermissions}
       />
       <Topbar
         collapsed={sidebarCollapsed}

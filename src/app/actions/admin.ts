@@ -296,6 +296,181 @@ export async function updateRole(roleId: string, updates: {
   return { success: true };
 }
 
+export interface UserPermissionItem {
+  can_view: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+  can_export: boolean;
+  can_approve: boolean;
+}
+
+export interface UserRoleAndPermissions {
+  user: {
+    id: string;
+    email?: string;
+  } | null;
+  profile: any;
+  role: {
+    id: string;
+    name: string;
+    display_name: string;
+  } | null;
+  permissions: Record<string, UserPermissionItem>;
+}
+
+export const ALL_SYSTEM_MODULES = [
+  "colaboradores",
+  "evaluaciones",
+  "configuracion",
+  "pmi",
+  "reportes",
+  "auditoria",
+  "administracion",
+  "dashboard",
+];
+
+export async function getCurrentUserRoleAndPermissions(): Promise<UserRoleAndPermissions> {
+  try {
+    const supabaseUser = await getSupabase();
+    const { data: userData } = await supabaseUser.auth.getUser();
+
+    if (!userData?.user) {
+      return { user: null, profile: null, role: null, permissions: {} };
+    }
+
+    const adminClient = getSupabaseAdmin();
+
+    const { data: profile } = await adminClient
+      .from("profiles")
+      .select("id, first_name, last_name, role_id, company_id, roles(id, name, display_name)")
+      .eq("id", userData.user.id)
+      .single();
+
+    if (!profile) {
+      return {
+        user: { id: userData.user.id, email: userData.user.email },
+        profile: null,
+        role: null,
+        permissions: {},
+      };
+    }
+
+    const roleData: any = Array.isArray(profile.roles) ? profile.roles[0] : profile.roles;
+    const roleName = roleData?.name || "";
+
+    // Si es super administrador ('admin'), tiene acceso total a todos los módulos
+    if (roleName === "admin") {
+      const adminPerms: Record<string, UserPermissionItem> = {};
+      ALL_SYSTEM_MODULES.forEach((mod) => {
+        adminPerms[mod] = {
+          can_view: true,
+          can_create: true,
+          can_edit: true,
+          can_delete: true,
+          can_export: true,
+          can_approve: true,
+        };
+      });
+      return {
+        user: { id: userData.user.id, email: userData.user.email },
+        profile,
+        role: roleData,
+        permissions: adminPerms,
+      };
+    }
+
+    const permMap: Record<string, UserPermissionItem> = {};
+
+    if (profile.role_id) {
+      const { data: perms } = await adminClient
+        .from("permissions")
+        .select("module, can_view, can_create, can_edit, can_delete, can_export, can_approve")
+        .eq("role_id", profile.role_id);
+
+      (perms || []).forEach((p: any) => {
+        permMap[p.module] = {
+          can_view: !!p.can_view,
+          can_create: !!p.can_create,
+          can_edit: !!p.can_edit,
+          can_delete: !!p.can_delete,
+          can_export: !!p.can_export,
+          can_approve: !!p.can_approve,
+        };
+      });
+    }
+
+    // Asegurar módulos por defecto
+    ALL_SYSTEM_MODULES.forEach((mod) => {
+      if (!permMap[mod]) {
+        permMap[mod] = {
+          can_view: mod === "dashboard", // Dashboard visible por defecto salvo restricción explícita
+          can_create: false,
+          can_edit: false,
+          can_delete: false,
+          can_export: false,
+          can_approve: false,
+        };
+      }
+    });
+
+    return {
+      user: { id: userData.user.id, email: userData.user.email },
+      profile,
+      role: roleData,
+      permissions: permMap,
+    };
+  } catch (err: any) {
+    console.error("Error in getCurrentUserRoleAndPermissions:", err);
+    return { user: null, profile: null, role: null, permissions: {} };
+  }
+}
+
+export async function verifyUserPermission(
+  module: string,
+  action: "can_view" | "can_create" | "can_edit" | "can_delete" | "can_export" | "can_approve" = "can_view"
+): Promise<{ allowed: boolean; user?: any; profile?: any; error?: string }> {
+  try {
+    const supabaseUser = await getSupabase();
+    const { data: userData } = await supabaseUser.auth.getUser();
+    if (!userData?.user) return { allowed: false, error: "No autenticado" };
+
+    const adminClient = getSupabaseAdmin();
+    const { data: profile } = await adminClient
+      .from("profiles")
+      .select("id, role_id, roles(id, name, display_name)")
+      .eq("id", userData.user.id)
+      .single();
+
+    if (!profile) return { allowed: false, error: "Perfil de usuario no encontrado" };
+
+    const roleData: any = Array.isArray(profile.roles) ? profile.roles[0] : profile.roles;
+    if (roleData?.name === "admin") {
+      return { allowed: true, user: userData.user, profile };
+    }
+
+    if (!profile.role_id) return { allowed: false, error: "Usuario sin rol asignado" };
+
+    const { data: perm } = await adminClient
+      .from("permissions")
+      .select("*")
+      .eq("role_id", profile.role_id)
+      .eq("module", module)
+      .single();
+
+    if (!perm || !perm[action]) {
+      return {
+        allowed: false,
+        error: `Acceso denegado: Tu rol no tiene permiso (${action}) para el módulo ${module}.`,
+      };
+    }
+
+    return { allowed: true, user: userData.user, profile };
+  } catch (err: any) {
+    return { allowed: false, error: err?.message || "Error al verificar permisos" };
+  }
+}
+
 export async function getPermissions(roleId: string) {
   const supabaseUser = await getSupabase();
   const { data: userData } = await supabaseUser.auth.getUser();
@@ -321,6 +496,11 @@ export async function updatePermissions(roleId: string, perms: Array<{
   can_export: boolean;
   can_approve: boolean;
 }>) {
+  const permCheck = await verifyUserPermission("administracion", "can_edit");
+  if (!permCheck.allowed) {
+    return { error: permCheck.error || "No tienes permisos para modificar roles y permisos." };
+  }
+
   const supabaseUser = await getSupabase();
   const { data: userData } = await supabaseUser.auth.getUser();
   if (!userData.user) return { error: "No autenticado" };
@@ -347,6 +527,7 @@ export async function updatePermissions(roleId: string, perms: Array<{
   }
 
   revalidatePath("/administracion/roles");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -383,6 +564,11 @@ export async function updateCompany(updates: {
   email?: string;
   logo_url?: string | null;
 }) {
+  const permCheck = await verifyUserPermission("configuracion", "can_edit");
+  if (!permCheck.allowed) {
+    return { error: permCheck.error || "No tienes permisos para modificar los datos de la empresa en Configuración." };
+  }
+
   const supabase = await getSupabase();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { error: "No autenticado" };

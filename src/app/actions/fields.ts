@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { logAudit } from "./audit";
+import { verifyUserPermission } from "./admin";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -57,6 +58,11 @@ export async function updateCollaboratorFieldConfig(
   updates: { label?: string; field_type?: string; is_required?: boolean; is_visible?: boolean }
 ) {
   try {
+    const permCheck = await verifyUserPermission("configuracion", "can_edit");
+    if (!permCheck.allowed) {
+      return { error: permCheck.error || "No tienes permisos para modificar campos en Configuración." };
+    }
+
     const supabase = await getSupabase();
     
     // Validar usuario

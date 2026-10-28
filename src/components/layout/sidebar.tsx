@@ -106,9 +106,27 @@ interface SidebarProps {
   onToggle: () => void;
   onItemClick?: () => void;
   userRole?: string;
+  userPermissions?: Record<string, {
+    can_view: boolean;
+    can_create?: boolean;
+    can_edit?: boolean;
+    can_delete?: boolean;
+    can_export?: boolean;
+    can_approve?: boolean;
+  }>;
 }
 
-export function Sidebar({ collapsed, onToggle, onItemClick, userRole }: SidebarProps) {
+const ITEM_MODULE_MAP: Record<string, string> = {
+  "Dashboard": "dashboard",
+  "Colaboradores": "colaboradores",
+  "Evaluaciones": "evaluaciones",
+  "Reportes": "reportes",
+  "Configuración": "configuracion",
+  "Administración": "administracion",
+  "Auditoría": "auditoria",
+};
+
+export function Sidebar({ collapsed, onToggle, onItemClick, userRole, userPermissions }: SidebarProps) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
@@ -124,7 +142,7 @@ export function Sidebar({ collapsed, onToggle, onItemClick, userRole }: SidebarP
     }
   };
 
-  // Filtrar dinámicamente navGroups basado en el rol del usuario
+  // Filtrar dinámicamente navGroups basado en el rol y los permisos de la BD
   const filteredNavGroups = navGroups.map(group => {
     const processedItems = group.items.map(item => {
       if (userRole === "lider" && item.title === "Administración") {
@@ -139,13 +157,29 @@ export function Sidebar({ collapsed, onToggle, onItemClick, userRole }: SidebarP
     });
 
     const filteredItems = processedItems.filter(item => {
-      // Si el rol es lider, ocultar: Configuración, Auditoría
+      // Si es 'Mi Perfil', siempre es visible
+      if (item.title === "Mi Perfil") return true;
+
+      // El superadministrador ve todo
+      if (userRole === "admin") return true;
+
+      const modName = ITEM_MODULE_MAP[item.title];
+
+      // Verificación dinámica mediante la matriz de permisos de la BD
+      if (modName && userPermissions && userPermissions[modName]) {
+        // Si no tiene permiso de ver (can_view = false), ocultar del menú
+        if (userPermissions[modName].can_view === false) {
+          return false;
+        }
+      }
+
+      // Reglas de compatibilidad históricas si aún no hay permisos en BD
       if (userRole === "lider") {
         if (item.title === "Configuración" || item.title === "Auditoría") {
           return false;
         }
       }
-      // Si el rol es colaborador, ocultar: Configuración, Administración, Auditoría, Evaluaciones, Colaboradores
+
       if (userRole === "colaborador") {
         if (
           item.title === "Configuración" ||
@@ -157,8 +191,27 @@ export function Sidebar({ collapsed, onToggle, onItemClick, userRole }: SidebarP
           return false;
         }
       }
+
       return true;
+    }).map(item => {
+      // Filtrar sub-elementos según permisos de creación
+      if (item.children && userPermissions && userRole !== "admin") {
+        const modName = ITEM_MODULE_MAP[item.title];
+        const perm = modName ? userPermissions[modName] : null;
+
+        if (perm) {
+          let updatedChildren = [...item.children];
+          if (perm.can_create === false) {
+            updatedChildren = updatedChildren.filter(c => 
+              c.title !== "Nuevo Colaborador" && c.title !== "Nueva Evaluación"
+            );
+          }
+          return { ...item, children: updatedChildren };
+        }
+      }
+      return item;
     });
+
     return { ...group, items: filteredItems };
   }).filter(group => group.items.length > 0);
 

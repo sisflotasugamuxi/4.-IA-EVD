@@ -206,6 +206,9 @@ function RoleEditorPanel({
       const r2 = await updatePermissions(role.id, permissions);
       if (r2.error) throw new Error(r2.error);
       toast.success("Rol y permisos guardados");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("permissions-updated"));
+      }
       onSave();
       onClose();
     } catch (err: any) {
