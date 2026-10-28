@@ -884,78 +884,78 @@ NOTIFY pgrst, 'reload schema';`;
         </div>
       )}
 
-      {/* Tarjetas KPI de Resumen */}
+      {/* Tarjetas KPI de Resumen (Paleta Corporativa: Azul Oscuro #012169, Azul Claro #0084d5 y Gris Slate) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-stretch">
         <div className="rounded-2xl border border-l-4 border-l-[#012169] bg-card p-4 shadow-xs flex flex-col justify-between gap-2.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Total Planificadas</span>
-            <div className="p-2 rounded-xl bg-[#012169]/10 text-[#012169] flex-shrink-0">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Planificadas</span>
+            <div className="p-2 rounded-xl bg-[#012169]/10 text-[#012169] dark:bg-[#012169]/30 dark:text-[#38bdf8] flex-shrink-0">
               <Users className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline justify-between gap-2">
-            <span className="text-2xl font-extrabold text-foreground tabular-nums">{stats.totalAssignments}</span>
+            <span className="text-2xl font-extrabold text-[#012169] dark:text-white tabular-nums">{stats.totalAssignments}</span>
             <span className="text-xs font-bold text-[#0084d5] tabular-nums">{stats.overallCompletion}% avance</span>
           </div>
-          <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
             <div className="bg-[#012169] h-full rounded-full transition-all" style={{ width: `${stats.overallCompletion}%` }} />
           </div>
         </div>
 
-        <div className="rounded-2xl border border-l-4 border-l-emerald-500 bg-card p-4 shadow-xs flex flex-col justify-between gap-2.5">
+        <div className="rounded-2xl border border-l-4 border-l-[#012169] bg-card p-4 shadow-xs flex flex-col justify-between gap-2.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Finalizadas</span>
-            <div className="p-2 rounded-xl bg-success-500/10 text-success-600 flex-shrink-0">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Finalizadas</span>
+            <div className="p-2 rounded-xl bg-[#012169]/10 text-[#012169] dark:bg-[#012169]/30 dark:text-[#38bdf8] flex-shrink-0">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline justify-between gap-2">
-            <span className="text-2xl font-extrabold text-success-600 tabular-nums">{stats.totalCompleted}</span>
-            <span className="text-xs font-medium text-muted-foreground">Completadas</span>
+            <span className="text-2xl font-extrabold text-[#012169] dark:text-white tabular-nums">{stats.totalCompleted}</span>
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Completadas</span>
           </div>
-          <p className="text-[11px] text-muted-foreground truncate">Con resultado y calificación</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">Con resultado y calificación</p>
         </div>
 
         <div className="rounded-2xl border border-l-4 border-l-[#0084d5] bg-card p-4 shadow-xs flex flex-col justify-between gap-2.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Pendientes de Firma</span>
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pendientes de Firma</span>
             <div className="p-2 rounded-xl bg-[#0084d5]/10 text-[#0084d5] flex-shrink-0">
               <FileText className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-2xl font-extrabold text-[#0084d5] tabular-nums">{stats.totalPendingSignature}</span>
-            <span className="text-xs font-medium text-muted-foreground">Firma Colab.</span>
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Firma Colab.</span>
           </div>
-          <p className="text-[11px] text-muted-foreground truncate">Calificadas sin firma aún</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">Calificadas sin firma aún</p>
         </div>
 
-        <div className="rounded-2xl border border-l-4 border-l-amber-500 bg-card p-4 shadow-xs flex flex-col justify-between gap-2.5">
+        <div className="rounded-2xl border border-l-4 border-l-slate-400 bg-card p-4 shadow-xs flex flex-col justify-between gap-2.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Sin Iniciar / En Proc.</span>
-            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 flex-shrink-0">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Sin Iniciar / En Proc.</span>
+            <div className="p-2 rounded-xl bg-slate-500/10 text-slate-600 dark:text-slate-300 flex-shrink-0">
               <Clock className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline justify-between gap-2">
-            <span className="text-2xl font-extrabold text-amber-600 tabular-nums">{stats.totalPending + stats.totalInProgress}</span>
-            <span className="text-xs font-medium text-muted-foreground">Por realizar</span>
+            <span className="text-2xl font-extrabold text-slate-600 dark:text-slate-300 tabular-nums">{stats.totalPending + stats.totalInProgress}</span>
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Por realizar</span>
           </div>
-          <p className="text-[11px] text-muted-foreground truncate">Pendientes del líder</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">Pendientes del líder</p>
         </div>
 
-        <div className="rounded-2xl border border-l-4 border-l-slate-500 bg-card p-4 shadow-xs flex flex-col justify-between gap-2.5">
+        <div className="rounded-2xl border border-l-4 border-l-[#0084d5] bg-card p-4 shadow-xs flex flex-col justify-between gap-2.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Líderes Asignados</span>
-            <div className="p-2 rounded-xl bg-slate-500/10 text-slate-600 flex-shrink-0">
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Líderes Asignados</span>
+            <div className="p-2 rounded-xl bg-[#0084d5]/10 text-[#0084d5] flex-shrink-0">
               <Briefcase className="w-4 h-4" />
             </div>
           </div>
           <div className="flex items-baseline justify-between gap-2">
-            <span className="text-2xl font-extrabold text-foreground tabular-nums">{stats.totalLeaders}</span>
-            <span className="text-xs font-medium text-muted-foreground">Evaluadores</span>
+            <span className="text-2xl font-extrabold text-[#012169] dark:text-white tabular-nums">{stats.totalLeaders}</span>
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Evaluadores</span>
           </div>
-          <p className="text-[11px] text-muted-foreground truncate">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
             {stats.totalLeaders > 0 ? (stats.totalAssignments / stats.totalLeaders).toFixed(1) : 0} colab. prom. por líder
           </p>
         </div>
@@ -1186,7 +1186,7 @@ NOTIFY pgrst, 'reload schema';`;
                           className={cn(
                             "w-11 h-11 rounded-2xl text-white flex items-center justify-center font-extrabold text-sm shadow-xs flex-shrink-0 transition-transform group-hover:scale-[1.02]",
                             isAllComplete
-                              ? "bg-gradient-to-br from-emerald-600 to-teal-500"
+                              ? "bg-[#012169]"
                               : "bg-gradient-to-br from-[#012169] to-[#0084d5]"
                           )}
                         >
@@ -1200,17 +1200,17 @@ NOTIFY pgrst, 'reload schema';`;
                         </div>
                         <div className="min-w-0 flex-1 space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-bold text-sm sm:text-base text-foreground truncate">
+                            <h3 className="font-bold text-sm sm:text-base text-[#012169] dark:text-white truncate">
                               {leader.leaderName}
                             </h3>
                             <span className="text-[10px] font-semibold uppercase tracking-wide bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700 truncate max-w-[260px]">
                               {leader.leaderPosition}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
+                          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 truncate">
                             <span className="truncate">{leader.leaderEmail}</span>
-                            <span className="text-border">•</span>
-                            <span className="font-medium text-foreground/70 flex-shrink-0">
+                            <span className="text-slate-300 dark:text-slate-600">•</span>
+                            <span className="font-semibold text-[#0084d5] flex-shrink-0">
                               {leader.totalAssigned} {leader.totalAssigned === 1 ? "asignado" : "asignados"}
                             </span>
                           </div>
@@ -1220,15 +1220,15 @@ NOTIFY pgrst, 'reload schema';`;
                       {/* Columna 2: Barra de Avance con Ancho Fijo en Grid (3/12) */}
                       <div className="lg:col-span-3 space-y-1.5">
                         <div className="flex items-center justify-between text-xs font-semibold">
-                          <span className="text-muted-foreground">Avance</span>
+                          <span className="text-slate-500 dark:text-slate-400">Avance</span>
                           <span
                             className={cn(
                               "font-extrabold tabular-nums",
                               isAllComplete
-                                ? "text-emerald-600 dark:text-emerald-400"
+                                ? "text-[#012169] dark:text-white"
                                 : leader.completionPercentage > 0
-                                ? "text-[#012169] dark:text-blue-400"
-                                : "text-muted-foreground"
+                                ? "text-[#0084d5]"
+                                : "text-slate-500 dark:text-slate-400"
                             )}
                           >
                             {leader.completionPercentage}%
@@ -1239,13 +1239,13 @@ NOTIFY pgrst, 'reload schema';`;
                             className={cn(
                               "h-full rounded-full transition-all duration-300",
                               isAllComplete
-                                ? "bg-emerald-500"
+                                ? "bg-[#012169]"
                                 : "bg-gradient-to-r from-[#012169] to-[#0084d5]"
                             )}
                             style={{ width: `${leader.completionPercentage}%` }}
                           />
                         </div>
-                        <div className="flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
                           <span>
                             {leader.pendingSignatureCount > 0
                               ? `${leader.pendingSignatureCount} por firma`
@@ -1261,12 +1261,12 @@ NOTIFY pgrst, 'reload schema';`;
 
                       {/* Columna 3: Badges de Estado con 2 Slots Fijos Simétricos (2/12) */}
                       <div className="lg:col-span-2 grid grid-cols-2 gap-2 items-center">
-                        {/* Slot 1: Realizadas (siempre visible para mantener alineación) */}
+                        {/* Slot 1: Realizadas (Azul Oscuro Corporativo cuando > 0, Gris Suave cuando 0) */}
                         <div
                           className={cn(
                             "h-7 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 tabular-nums border transition-colors",
                             completedCount > 0
-                              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
+                              ? "bg-[#012169]/10 text-[#012169] dark:bg-[#012169]/30 dark:text-[#38bdf8] border-[#012169]/20"
                               : "bg-slate-100/70 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500 border-slate-200/60 dark:border-slate-800"
                           )}
                           title={`${completedCount} evaluaciones finalizadas`}
@@ -1275,13 +1275,13 @@ NOTIFY pgrst, 'reload schema';`;
                           <span>{completedCount} fin.</span>
                         </div>
 
-                        {/* Slot 2: Pendientes / Faltantes (siempre visible para mantener alineación) */}
+                        {/* Slot 2: Pendientes / Faltantes (Gris Corporativo cuando > 0, Azul Claro cuando 0) */}
                         <div
                           className={cn(
                             "h-7 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 tabular-nums border transition-colors",
                             remainingCount > 0
-                              ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25"
-                              : "bg-emerald-500/5 text-emerald-600/70 dark:text-emerald-400/60 border-emerald-500/15"
+                              ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border-slate-300/80 dark:border-slate-700"
+                              : "bg-[#0084d5]/10 text-[#0084d5] border-[#0084d5]/20"
                           )}
                           title={`${remainingCount} evaluaciones faltantes o pendientes`}
                         >
@@ -1293,15 +1293,15 @@ NOTIFY pgrst, 'reload schema';`;
                       {/* Columna 4: Promedio Fijo + Botón Desplegar (2/12) */}
                       <div className="lg:col-span-2 flex items-center justify-between lg:justify-end gap-3">
                         <div className="w-20 text-left lg:text-right flex-shrink-0">
-                          <span className="text-[10px] text-muted-foreground block uppercase font-bold tracking-wider">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block uppercase font-bold tracking-wider">
                             Promedio
                           </span>
                           {leader.averageScore > 0 ? (
-                            <span className="text-sm font-extrabold text-[#012169] dark:text-blue-400 tabular-nums">
+                            <span className="text-sm font-extrabold text-[#012169] dark:text-[#38bdf8] tabular-nums">
                               {formatScore(leader.averageScore)}
                             </span>
                           ) : (
-                            <span className="text-sm font-bold text-muted-foreground/40 tabular-nums">
+                            <span className="text-sm font-bold text-slate-400 dark:text-slate-500 tabular-nums">
                               —
                             </span>
                           )}
@@ -1312,7 +1312,7 @@ NOTIFY pgrst, 'reload schema';`;
                             "w-8 h-8 rounded-lg flex items-center justify-center border transition-colors flex-shrink-0",
                             isExpanded
                               ? "bg-[#012169] text-white border-[#012169]"
-                              : "border-border/60 text-muted-foreground group-hover:bg-muted group-hover:text-foreground"
+                              : "border-slate-200 dark:border-slate-700 text-slate-500 group-hover:bg-slate-100 dark:group-hover:bg-slate-800 group-hover:text-[#012169]"
                           )}
                         >
                           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -1365,7 +1365,7 @@ NOTIFY pgrst, 'reload schema';`;
                                       </td>
                                       <td className="py-2.5 px-4 text-center">
                                         {st === "finalizada" ? (
-                                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-success-500/10 text-success-600 border border-success-500/20 min-w-[105px]">
+                                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#012169]/10 text-[#012169] dark:bg-[#012169]/30 dark:text-[#38bdf8] border border-[#012169]/20 min-w-[105px]">
                                             <CheckCircle2 className="w-3 h-3" />
                                             Finalizada
                                           </span>
@@ -1375,23 +1375,23 @@ NOTIFY pgrst, 'reload schema';`;
                                             Pendiente Firma
                                           </span>
                                         ) : st === "en_proceso" ? (
-                                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20 min-w-[105px]">
+                                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#0084d5]/5 text-[#0084d5] border border-[#0084d5]/20 min-w-[105px]">
                                             <Clock className="w-3 h-3" />
                                             En Proceso
                                           </span>
                                         ) : (
-                                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border min-w-[105px]">
+                                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 min-w-[105px]">
                                             Sin Iniciar
                                           </span>
                                         )}
                                       </td>
                                       <td className="py-2.5 px-4 text-center font-bold tabular-nums">
                                         {evalRes?.overall_average != null ? (
-                                          <span className="text-[#012169] dark:text-blue-400">
+                                          <span className="text-[#012169] dark:text-[#38bdf8]">
                                             {formatScore(evalRes.overall_average)}
                                           </span>
                                         ) : (
-                                          <span className="text-muted-foreground/40 font-normal">—</span>
+                                          <span className="text-slate-400 font-normal">—</span>
                                         )}
                                       </td>
                                       <td className="py-2.5 px-4 text-right">
@@ -1399,7 +1399,7 @@ NOTIFY pgrst, 'reload schema';`;
                                           {assignment.evaluation_id ? (
                                             <Link
                                               href={`/evaluaciones/${assignment.evaluation_id}`}
-                                              className="p-1.5 rounded-md text-muted-foreground hover:text-[#012169] hover:bg-muted transition-colors"
+                                              className="p-1.5 rounded-md text-slate-500 hover:text-[#012169] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                               title="Ver Evaluación"
                                             >
                                               <ExternalLink className="w-3.5 h-3.5" />
@@ -1407,7 +1407,7 @@ NOTIFY pgrst, 'reload schema';`;
                                           ) : (
                                             <Link
                                               href={`/evaluaciones/nueva?collab=${collab?.id}`}
-                                              className="p-1.5 rounded-md text-muted-foreground hover:text-success-600 hover:bg-muted transition-colors"
+                                              className="p-1.5 rounded-md text-slate-500 hover:text-[#0084d5] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                               title="Iniciar Evaluación"
                                             >
                                               <Plus className="w-3.5 h-3.5" />
@@ -1422,7 +1422,7 @@ NOTIFY pgrst, 'reload schema';`;
                                               loadAuxData();
                                               setShowReassignModal(true);
                                             }}
-                                            className="p-1.5 rounded-md text-muted-foreground hover:text-[#0084d5] hover:bg-muted transition-colors cursor-pointer"
+                                            className="p-1.5 rounded-md text-slate-500 hover:text-[#0084d5] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                                             title="Reasignar a otro líder"
                                           >
                                             <Edit3 className="w-3.5 h-3.5" />
@@ -1430,7 +1430,7 @@ NOTIFY pgrst, 'reload schema';`;
 
                                           <button
                                             onClick={() => handleDeleteAssignment(assignment.id, collab?.full_name || "este colaborador")}
-                                            className="p-1.5 rounded-md text-muted-foreground hover:text-danger-600 hover:bg-muted transition-colors cursor-pointer"
+                                            className="p-1.5 rounded-md text-slate-500 hover:text-[#012169] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                                             title="Eliminar asignación"
                                           >
                                             <Trash2 className="w-3.5 h-3.5" />
@@ -1505,7 +1505,7 @@ NOTIFY pgrst, 'reload schema';`;
                         </td>
                         <td className="py-3 px-4 text-center">
                           {a.status === "finalizada" ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-success-500/10 text-success-600 border border-success-500/20">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#012169]/10 text-[#012169] dark:bg-[#012169]/30 dark:text-[#38bdf8] border border-[#012169]/20">
                               Finalizada
                             </span>
                           ) : a.status === "pendiente_firma" ? (
@@ -1513,22 +1513,22 @@ NOTIFY pgrst, 'reload schema';`;
                               Pendiente Firma
                             </span>
                           ) : a.status === "en_proceso" ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#0084d5]/5 text-[#0084d5] border border-[#0084d5]/20">
                               En Proceso
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                               Sin Iniciar
                             </span>
                           )}
                         </td>
                         <td className="py-3 px-4 text-center font-bold">
                           {evalRes?.overall_average != null ? (
-                            <span className="text-[#012169] dark:text-blue-400">
+                            <span className="text-[#012169] dark:text-[#38bdf8]">
                               {formatScore(evalRes.overall_average)}
                             </span>
                           ) : (
-                            <span className="text-muted-foreground/40 font-normal">—</span>
+                            <span className="text-slate-400 font-normal">—</span>
                           )}
                         </td>
                         <td className="py-3 px-4 text-right">
@@ -1536,7 +1536,7 @@ NOTIFY pgrst, 'reload schema';`;
                             {a.evaluation_id ? (
                               <Link
                                 href={`/evaluaciones/${a.evaluation_id}`}
-                                className="p-1 rounded-md text-muted-foreground hover:text-[#012169] hover:bg-muted transition-colors"
+                                className="p-1 rounded-md text-slate-500 hover:text-[#012169] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                 title="Ver Evaluación"
                               >
                                 <ExternalLink className="w-3.5 h-3.5" />
@@ -1544,7 +1544,7 @@ NOTIFY pgrst, 'reload schema';`;
                             ) : (
                               <Link
                                 href={`/evaluaciones/nueva?collab=${collab?.id}`}
-                                className="p-1 rounded-md text-muted-foreground hover:text-success-600 hover:bg-muted transition-colors"
+                                className="p-1 rounded-md text-slate-500 hover:text-[#0084d5] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                 title="Iniciar Evaluación"
                               >
                                 <Plus className="w-3.5 h-3.5" />
@@ -1559,7 +1559,7 @@ NOTIFY pgrst, 'reload schema';`;
                                 loadAuxData();
                                 setShowReassignModal(true);
                               }}
-                              className="p-1 rounded-md text-muted-foreground hover:text-[#0084d5] hover:bg-muted transition-colors cursor-pointer"
+                              className="p-1 rounded-md text-slate-500 hover:text-[#0084d5] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                               title="Reasignar líder"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
@@ -1567,7 +1567,7 @@ NOTIFY pgrst, 'reload schema';`;
 
                             <button
                               onClick={() => handleDeleteAssignment(a.id, collab?.full_name || "este colaborador")}
-                              className="p-1 rounded-md text-muted-foreground hover:text-danger-600 hover:bg-muted transition-colors cursor-pointer"
+                              className="p-1 rounded-md text-slate-500 hover:text-[#012169] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                               title="Eliminar asignación"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1632,7 +1632,7 @@ NOTIFY pgrst, 'reload schema';`;
                           Líder Evaluador
                         </label>
                         {selectedLeaderObj && (
-                          <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md flex items-center gap-1">
+                          <span className="text-[11px] font-semibold text-[#0084d5] bg-[#0084d5]/10 px-2 py-0.5 rounded-md flex items-center gap-1">
                             <Check className="w-3 h-3" /> Seleccionado
                           </span>
                         )}
@@ -2028,8 +2028,8 @@ NOTIFY pgrst, 'reload schema';`;
                                       className={cn(
                                         "text-[10px] font-semibold px-2 py-0.5 rounded-md block whitespace-nowrap",
                                         collab.assignedLeaderId === manualLeaderId
-                                          ? "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
-                                          : "bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300"
+                                          ? "bg-[#012169]/10 text-[#012169] dark:text-[#38bdf8]"
+                                          : "bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
                                       )}
                                       title={
                                         collab.assignedLeaderId === manualLeaderId
@@ -2042,7 +2042,7 @@ NOTIFY pgrst, 'reload schema';`;
                                         : `Asignado a: ${collab.assignedLeaderName?.split(" ")[0]}`}
                                     </span>
                                   ) : (
-                                    <span className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-md whitespace-nowrap">
+                                    <span className="text-[10px] font-semibold bg-[#0084d5]/10 text-[#0084d5] px-2 py-0.5 rounded-md whitespace-nowrap">
                                       Sin asignar
                                     </span>
                                   )}
