@@ -83,15 +83,31 @@ export default function AsignacionesPage() {
   const [excelFile, setExcelFile] = useState<File | null>(null);
   const [excelPreview, setExcelPreview] = useState<any[]>([]);
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importStepText, setImportStepText] = useState("");
   const [importResult, setImportResult] = useState<any | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Progreso de carga inicial del módulo
+  const [loadProgress, setLoadProgress] = useState(0);
 
   // Copiado de SQL
   const [copiedSql, setCopiedSql] = useState(false);
 
-  // Cargar datos principales
+  // Cargar datos principales con progreso animado
   const loadData = async () => {
     setLoading(true);
+    setLoadProgress(15);
+
+    const progressTimer = setInterval(() => {
+      setLoadProgress((prev) => {
+        if (prev < 40) return prev + 15;
+        if (prev < 75) return prev + 10;
+        if (prev < 92) return prev + 4;
+        return prev;
+      });
+    }, 150);
+
     try {
       const [resAssignments, resSummaries, resStats] = await Promise.all([
         getEvaluationAssignments({ year: selectedYear }),
@@ -99,9 +115,12 @@ export default function AsignacionesPage() {
         getAssignmentsStats(selectedYear)
       ]);
 
+      clearInterval(progressTimer);
+      setLoadProgress(100);
+
       if (resAssignments.tableNotCreated) {
         setTableNotCreated(true);
-        setLoading(false);
+        setTimeout(() => setLoading(false), 200);
         return;
       }
 
@@ -125,10 +144,11 @@ export default function AsignacionesPage() {
       });
       setExpandedLeaders(initialExpanded);
     } catch (err) {
+      clearInterval(progressTimer);
       console.error(err);
       toast.error("Error al cargar asignaciones de evaluación");
     } finally {
-      setLoading(false);
+      setTimeout(() => setLoading(false), 200);
     }
   };
 
@@ -390,6 +410,8 @@ export default function AsignacionesPage() {
 
     setExcelFile(file);
     setImportResult(null);
+    setImportProgress(0);
+    setImportStepText("");
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
@@ -413,7 +435,7 @@ export default function AsignacionesPage() {
     reader.readAsBinaryString(file);
   };
 
-  // Confirmar importación desde Excel
+  // Confirmar importación desde Excel con animación y porcentaje de avance
   const handleConfirmImport = async () => {
     if (!excelFile) {
       toast.error("Seleccione un archivo Excel primero.");
@@ -421,9 +443,24 @@ export default function AsignacionesPage() {
     }
 
     setImporting(true);
+    setImportProgress(10);
+    setImportStepText("Leyendo archivo Excel y analizando hojas de cálculo...");
+
+    const progressTimer = setInterval(() => {
+      setImportProgress((prev) => {
+        if (prev < 35) return prev + 10;
+        if (prev < 68) return prev + 6;
+        if (prev < 88) return prev + 2;
+        return prev;
+      });
+    }, 200);
+
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
+        setImportProgress(40);
+        setImportStepText("Extrayendo columnas de colaboradores y líderes evaluadores...");
+
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: "binary" });
         const wsname = wb.SheetNames[0];
@@ -500,18 +537,30 @@ export default function AsignacionesPage() {
           };
         });
 
-        const res = await importAssignmentsFromExcelData(formattedRows, selectedYear);
-        setImporting(false);
-        setImportResult(res);
+        setImportProgress(70);
+        setImportStepText(`Validando ${formattedRows.length} asignaciones en la base de datos...`);
 
-        if (res.success) {
-          toast.success(`Importación exitosa: ${res.importedCount} asignaciones registradas.`);
-          loadData();
-        } else {
-          toast.error("Hubo errores al procesar el archivo. Revisa el reporte en pantalla.");
-        }
+        const res = await importAssignmentsFromExcelData(formattedRows, selectedYear);
+
+        clearInterval(progressTimer);
+        setImportProgress(100);
+        setImportStepText("¡Cargue finalizado! Aplicando asignaciones y reporte...");
+
+        setTimeout(() => {
+          setImporting(false);
+          setImportResult(res);
+
+          if (res.success) {
+            toast.success(`Importación exitosa: ${res.importedCount} asignaciones registradas.`);
+            loadData();
+          } else {
+            toast.error("Hubo observaciones al procesar el archivo. Revisa el reporte en pantalla.");
+          }
+        }, 400);
       } catch (err: any) {
+        clearInterval(progressTimer);
         setImporting(false);
+        setImportProgress(0);
         console.error(err);
         toast.error("Error al importar: " + (err?.message || "Error desconocido"));
       }
@@ -989,11 +1038,44 @@ NOTIFY pgrst, 'reload schema';`;
         </div>
       </div>
 
-      {/* Contenido Principal */}
+      {/* Contenido Principal con animación y porcentaje de avance */}
       {loading ? (
-        <div className="rounded-2xl border bg-card p-12 text-center text-muted-foreground space-y-3">
-          <div className="w-8 h-8 border-3 border-[#012169]/30 border-t-[#012169] rounded-full animate-spin mx-auto" />
-          <p className="text-sm font-medium">Cargando asignaciones del ciclo {selectedYear}...</p>
+        <div className="rounded-2xl border bg-card/85 backdrop-blur-xs p-10 text-center space-y-5 shadow-sm max-w-md mx-auto my-12 animate-fade-in">
+          <div className="relative w-16 h-16 mx-auto flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-[#012169]/15 animate-ping opacity-60" />
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#012169] to-[#0084d5] text-white flex items-center justify-center shadow-lg shadow-[#012169]/25">
+              <UserCheck className="w-7 h-7 animate-pulse" />
+            </div>
+          </div>
+          
+          <div className="space-y-1">
+            <h4 className="text-sm font-bold text-foreground">
+              Cargando asignaciones del ciclo {selectedYear}
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              Consultando líderes, colaboradores asignados y estadísticas...
+            </p>
+          </div>
+
+          <div className="space-y-2 pt-1 max-w-xs mx-auto">
+            <div className="flex justify-between items-center text-xs font-semibold px-0.5">
+              <span className="text-muted-foreground text-[11px] flex items-center gap-1.5">
+                <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                Sincronizando datos...
+              </span>
+              <span className="font-mono font-bold text-[#012169] dark:text-blue-400 text-sm">
+                {loadProgress}%
+              </span>
+            </div>
+            <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-200 dark:border-slate-700">
+              <div
+                className="h-full bg-gradient-to-r from-[#012169] via-[#0084d5] to-[#38bdf8] rounded-full transition-all duration-300 ease-out relative overflow-hidden"
+                style={{ width: `${loadProgress}%` }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent animate-[shimmer_1.5s_infinite]" />
+              </div>
+            </div>
+          </div>
         </div>
       ) : assignments.length === 0 ? (
         <div className="rounded-2xl border border-dashed bg-card p-12 text-center space-y-4">
@@ -1985,6 +2067,49 @@ NOTIFY pgrst, 'reload schema';`;
                 )}
               </div>
 
+              {/* Barra y Porcentaje de Avance durante el Cargue */}
+              {importing && (
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-50/80 via-white to-blue-50/40 dark:from-blue-950/30 dark:via-card dark:to-blue-900/10 border-2 border-blue-200 dark:border-blue-800 shadow-md space-y-3 animate-fade-in">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <div className="flex items-center gap-2.5 text-[#012169] dark:text-blue-300">
+                      <div className="w-5 h-5 rounded-full border-2 border-[#012169]/30 border-t-[#012169] dark:border-blue-400/30 dark:border-t-blue-400 animate-spin flex-shrink-0" />
+                      <div>
+                        <p className="font-bold text-xs">{importStepText || "Procesando cargue de asignaciones..."}</p>
+                        <p className="text-[10px] text-muted-foreground font-normal">Por favor espera mientras se valida y sincroniza la información</p>
+                      </div>
+                    </div>
+                    <span className="font-mono text-base font-black text-[#012169] dark:text-blue-400 px-2.5 py-1 rounded-lg bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800">
+                      {importProgress}%
+                    </span>
+                  </div>
+
+                  {/* Barra animada con gradiente y efecto shimmer */}
+                  <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden p-0.5 border">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#012169] via-[#0084d5] to-[#38bdf8] rounded-full transition-all duration-300 ease-out relative overflow-hidden"
+                      style={{ width: `${importProgress}%` }}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent animate-[shimmer_1.5s_infinite]" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground font-medium px-1">
+                    <span className={importProgress >= 20 ? "text-blue-700 dark:text-blue-300 font-bold" : ""}>
+                      ✓ 1. Lectura
+                    </span>
+                    <span className={importProgress >= 50 ? "text-blue-700 dark:text-blue-300 font-bold" : ""}>
+                      ✓ 2. Normalización
+                    </span>
+                    <span className={importProgress >= 70 ? "text-blue-700 dark:text-blue-300 font-bold" : ""}>
+                      ✓ 3. Validación BD
+                    </span>
+                    <span className={importProgress === 100 ? "text-success-600 font-bold" : ""}>
+                      ✓ 4. Finalizado
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Vista Previa de Filas */}
               {excelPreview.length > 0 && (
                 <div className="space-y-2">
@@ -2129,7 +2254,7 @@ NOTIFY pgrst, 'reload schema';`;
                   {importing ? (
                     <>
                       <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>Procesando Excel...</span>
+                      <span>Procesando... {importProgress}%</span>
                     </>
                   ) : (
                     <span>Procesar e Importar Asignaciones</span>
