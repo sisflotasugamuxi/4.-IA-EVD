@@ -67,6 +67,18 @@ export default function AsignacionesPage() {
   const [manualNotes, setManualNotes] = useState("");
   const [savingManual, setSavingManual] = useState(false);
 
+  // Filtros y búsquedas para Modal Manual
+  const [manualLeaderSearch, setManualLeaderSearch] = useState("");
+  const [manualLeaderPositionFilter, setManualLeaderPositionFilter] = useState("todos");
+  const [manualCollabSearch, setManualCollabSearch] = useState("");
+  const [manualCollabPositionFilter, setManualCollabPositionFilter] = useState("todos");
+  const [manualCollabStatusFilter, setManualCollabStatusFilter] = useState<"todos" | "sin_asignar" | "asignados">("todos");
+  const [manualCollabAreaFilter, setManualCollabAreaFilter] = useState("todos");
+
+  // Búsqueda para Modal Reasignar
+  const [reassignSearch, setReassignSearch] = useState("");
+  const [reassignNewLeaderId, setReassignNewLeaderId] = useState("");
+
   // Estado Importación Excel
   const [excelFile, setExcelFile] = useState<File | null>(null);
   const [excelPreview, setExcelPreview] = useState<any[]>([]);
@@ -145,6 +157,12 @@ export default function AsignacionesPage() {
     setManualLeaderId("");
     setManualCollabIds([]);
     setManualNotes("");
+    setManualLeaderSearch("");
+    setManualLeaderPositionFilter("todos");
+    setManualCollabSearch("");
+    setManualCollabPositionFilter("todos");
+    setManualCollabStatusFilter("todos");
+    setManualCollabAreaFilter("todos");
     loadAuxData();
     setShowManualModal(true);
   };
@@ -198,6 +216,103 @@ export default function AsignacionesPage() {
       return matchesStatus && matchesLeader && matchesSearch;
     });
   }, [assignments, searchTerm, statusFilter, leaderFilter]);
+
+  // Opciones únicas de cargos para filtros en modal manual
+  const uniqueLeaderPositions = useMemo(() => {
+    const positions = new Set<string>();
+    leadersList.forEach((l) => {
+      if (l.position) positions.add(l.position);
+    });
+    return Array.from(positions).sort();
+  }, [leadersList]);
+
+  const uniqueCollabPositions = useMemo(() => {
+    const positions = new Set<string>();
+    collaboratorsList.forEach((c) => {
+      if (c.position) positions.add(c.position);
+    });
+    return Array.from(positions).sort();
+  }, [collaboratorsList]);
+
+  const uniqueCollabAreas = useMemo(() => {
+    const areas = new Set<string>();
+    collaboratorsList.forEach((c) => {
+      if (c.area) areas.add(c.area);
+    });
+    return Array.from(areas).sort();
+  }, [collaboratorsList]);
+
+  // Líderes filtrados para modal manual
+  const filteredLeadersForManual = useMemo(() => {
+    const q = manualLeaderSearch.toLowerCase().trim();
+    return leadersList.filter((l) => {
+      const matchesPosition = manualLeaderPositionFilter === "todos" || l.position === manualLeaderPositionFilter;
+      const matchesSearch = !q ||
+        (l.name || "").toLowerCase().includes(q) ||
+        (l.document_number || "").includes(q) ||
+        (l.position || "").toLowerCase().includes(q) ||
+        (l.email || "").toLowerCase().includes(q) ||
+        (l.role || "").toLowerCase().includes(q);
+      return matchesPosition && matchesSearch;
+    });
+  }, [leadersList, manualLeaderSearch, manualLeaderPositionFilter]);
+
+  // Colaboradores filtrados para modal manual
+  const filteredCollabsForManual = useMemo(() => {
+    const q = manualCollabSearch.toLowerCase().trim();
+    return collaboratorsList.filter((c) => {
+      const matchesSearch = !q ||
+        (c.full_name || "").toLowerCase().includes(q) ||
+        (c.document_number || "").includes(q) ||
+        (c.position || "").toLowerCase().includes(q) ||
+        (c.area || "").toLowerCase().includes(q);
+
+      const matchesPosition = manualCollabPositionFilter === "todos" || c.position === manualCollabPositionFilter;
+      const matchesArea = manualCollabAreaFilter === "todos" || c.area === manualCollabAreaFilter;
+      const matchesStatus =
+        manualCollabStatusFilter === "todos" ||
+        (manualCollabStatusFilter === "sin_asignar" && !c.isAssigned) ||
+        (manualCollabStatusFilter === "asignados" && c.isAssigned);
+
+      return matchesSearch && matchesPosition && matchesArea && matchesStatus;
+    });
+  }, [collaboratorsList, manualCollabSearch, manualCollabPositionFilter, manualCollabAreaFilter, manualCollabStatusFilter]);
+
+  const selectedLeaderObj = useMemo(() => {
+    return leadersList.find((l) => l.id === manualLeaderId) || null;
+  }, [leadersList, manualLeaderId]);
+
+  // Acciones de selección en lote para colaboradores en modal manual
+  const handleSelectAllVisibleCollabs = () => {
+    const visibleIds = filteredCollabsForManual.map((c) => c.id);
+    setManualCollabIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+  };
+
+  const handleDeselectAllVisibleCollabs = () => {
+    const visibleSet = new Set(filteredCollabsForManual.map((c) => c.id));
+    setManualCollabIds((prev) => prev.filter((id) => !visibleSet.has(id)));
+  };
+
+  const handleClearAllSelectedCollabs = () => {
+    setManualCollabIds([]);
+  };
+
+  // Líderes filtrados para modal de reasignación
+  const filteredLeadersForReassign = useMemo(() => {
+    const q = reassignSearch.toLowerCase().trim();
+    return leadersList.filter((l) => {
+      if (selectedAssignmentForReassign && l.id === selectedAssignmentForReassign.evaluator_id) {
+        return false;
+      }
+      return (
+        !q ||
+        (l.name || "").toLowerCase().includes(q) ||
+        (l.document_number || "").includes(q) ||
+        (l.position || "").toLowerCase().includes(q) ||
+        (l.role || "").toLowerCase().includes(q)
+      );
+    });
+  }, [leadersList, reassignSearch, selectedAssignmentForReassign]);
 
   // Guardar asignación manual
   const handleSaveManual = async (e: React.FormEvent) => {
@@ -978,6 +1093,8 @@ CREATE POLICY "Líderes pueden ver sus evaluaciones asignadas" ON evaluation_ass
                                         <button
                                           onClick={() => {
                                             setSelectedAssignmentForReassign(assignment);
+                                            setReassignSearch("");
+                                            setReassignNewLeaderId("");
                                             loadAuxData();
                                             setShowReassignModal(true);
                                           }}
@@ -1112,6 +1229,8 @@ CREATE POLICY "Líderes pueden ver sus evaluaciones asignadas" ON evaluation_ass
                             <button
                               onClick={() => {
                                 setSelectedAssignmentForReassign(a);
+                                setReassignSearch("");
+                                setReassignNewLeaderId("");
                                 loadAuxData();
                                 setShowReassignModal(true);
                               }}
@@ -1142,136 +1261,538 @@ CREATE POLICY "Líderes pueden ver sus evaluaciones asignadas" ON evaluation_ass
 
       {/* MODAL 1: ASIGNACIÓN MANUAL */}
       {showManualModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in">
-          <div className="bg-card border rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="p-5 border-b flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-base text-foreground">Asignación Manual de Evaluaciones</h3>
-                <p className="text-xs text-muted-foreground">Ciclo de Evaluación {selectedYear}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-card border rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] overflow-hidden flex flex-col">
+            {/* Cabecera del Modal */}
+            <div className="p-4 sm:p-5 border-b flex items-center justify-between bg-muted/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#012169] text-white flex items-center justify-center shadow-xs flex-shrink-0">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base sm:text-lg text-foreground">
+                    Asignación Manual de Evaluaciones
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Ciclo de Evaluación {selectedYear} · Selecciona el líder evaluador y los colaboradores correspondientes
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setShowManualModal(false)}
-                className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+                className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveManual} className="p-5 space-y-4 overflow-y-auto flex-1">
-              {loadingAuxData ? (
-                <div className="py-12 text-center text-muted-foreground space-y-2">
-                  <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                  <p className="text-xs">Cargando líderes y colaboradores...</p>
-                </div>
-              ) : (
-                <>
-                  {/* Selector de Líder */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                      <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
-                      Líder Evaluador
-                    </label>
-                    <select
-                      value={manualLeaderId}
-                      onChange={(e) => setManualLeaderId(e.target.value)}
-                      required
-                      className="w-full rounded-xl border bg-background px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#012169]/30"
-                    >
-                      <option value="">Seleccione el líder evaluador...</option>
-                      {leadersList.map((l) => (
-                        <option key={l.id} value={l.id}>
-                          {l.name} — {l.position} ({l.role})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+            {loadingAuxData ? (
+              <div className="py-20 text-center text-muted-foreground space-y-3 flex-1 flex flex-col items-center justify-center">
+                <div className="w-8 h-8 border-3 border-[#012169]/30 border-t-[#012169] rounded-full animate-spin" />
+                <p className="text-sm font-medium">Cargando líderes y colaboradores del sistema...</p>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveManual} className="flex flex-col flex-1 overflow-hidden">
+                <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
+                  {/* Grid de 2 Columnas: Líder Evaluador (izq) y Colaboradores a Asignar (der) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                    
+                    {/* COLUMNA 1: LÍDER EVALUADOR (5/12) */}
+                    <div className="lg:col-span-5 rounded-2xl border bg-background p-4 space-y-3 shadow-2xs">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-foreground flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-[#012169] text-white text-[11px] flex items-center justify-center font-extrabold">
+                            1
+                          </span>
+                          Líder Evaluador
+                        </label>
+                        {selectedLeaderObj && (
+                          <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md flex items-center gap-1">
+                            <Check className="w-3 h-3" /> Seleccionado
+                          </span>
+                        )}
+                      </div>
 
-                  {/* Selector de Colaboradores */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <Users className="w-3.5 h-3.5 text-muted-foreground" />
-                        Colaboradores a Asignar ({manualCollabIds.length} seleccionados)
-                      </span>
-                      <span className="text-[11px] text-muted-foreground font-normal">
-                        Marca los colaboradores correspondientes
-                      </span>
-                    </label>
-
-                    <div className="max-h-60 overflow-y-auto border rounded-xl divide-y bg-background p-1">
-                      {collaboratorsList.map((collab) => {
-                        const isChecked = manualCollabIds.includes(collab.id);
-                        return (
-                          <label
-                            key={collab.id}
-                            className={cn(
-                              "flex items-center justify-between p-2 rounded-lg cursor-pointer text-xs transition-colors hover:bg-muted/40",
-                              isChecked && "bg-brand-500/5 dark:bg-brand-500/10"
-                            )}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setManualCollabIds((prev) => [...prev, collab.id]);
-                                  } else {
-                                    setManualCollabIds((prev) => prev.filter((id) => id !== collab.id));
-                                  }
-                                }}
-                                className="rounded text-[#012169] focus:ring-0"
-                              />
+                      {/* Tarjeta de Líder Seleccionado (Zona de Soltado / Dropzone) */}
+                      {selectedLeaderObj && (
+                        <div
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = "copy";
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const collabId = e.dataTransfer.getData("text/plain");
+                            if (collabId) {
+                              setManualCollabIds((prev) =>
+                                prev.includes(collabId) ? prev : [...prev, collabId]
+                              );
+                              toast.info("Colaborador agregado a la asignación");
+                            }
+                          }}
+                          className="p-3.5 rounded-xl border-2 border-[#012169]/40 bg-gradient-to-br from-blue-50/70 to-slate-50/70 dark:from-blue-950/20 dark:to-slate-900/20 space-y-3 transition-all"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#012169] to-[#0084d5] text-white flex items-center justify-center font-extrabold text-sm shadow-xs flex-shrink-0">
+                                {selectedLeaderObj.name
+                                  .split(" ")
+                                  .filter(Boolean)
+                                  .map((n: string) => n[0])
+                                  .join("")
+                                  .slice(0, 2)
+                                  .toUpperCase()}
+                              </div>
                               <div className="min-w-0">
-                                <p className="font-semibold text-foreground truncate">{collab.full_name}</p>
-                                <p className="text-[11px] text-muted-foreground">
-                                  {collab.document_number} · {collab.position}
+                                <h4 className="font-bold text-xs sm:text-sm text-foreground truncate">
+                                  {selectedLeaderObj.name}
+                                </h4>
+                                <p className="text-[11px] text-muted-foreground truncate">
+                                  {selectedLeaderObj.position}
                                 </p>
                               </div>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => setManualLeaderId("")}
+                              className="text-xs font-semibold text-[#0084d5] hover:text-[#012169] dark:hover:text-blue-300 underline cursor-pointer flex-shrink-0"
+                            >
+                              Cambiar
+                            </button>
+                          </div>
 
-                            {collab.isAssigned && (
-                              <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full flex-shrink-0">
-                                Asignado a: {collab.assignedLeaderName?.split(" ")[0]}
-                              </span>
-                            )}
+                          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border/50 text-[11px]">
+                            <span className="px-2 py-0.5 rounded-md bg-muted text-foreground font-semibold">
+                              CC: {selectedLeaderObj.document_number || "Sin Documento"}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-[#012169]/10 text-[#012169] dark:text-blue-300 font-semibold">
+                              Rol: {selectedLeaderObj.role}
+                            </span>
+                          </div>
+
+                          <div className="p-2 rounded-lg bg-blue-100/50 dark:bg-blue-900/30 text-[11px] text-blue-900 dark:text-blue-200 flex items-center justify-between">
+                            <span>Colaboradores a asignar:</span>
+                            <span className="font-bold text-xs px-2 py-0.5 rounded-full bg-[#012169] text-white">
+                              {manualCollabIds.length}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Buscador y Filtro de Líderes */}
+                      <div className="space-y-2">
+                        {selectedLeaderObj && (
+                          <p className="text-[11px] font-semibold text-muted-foreground pt-1">
+                            O selecciona otro líder de la lista:
+                          </p>
+                        )}
+
+                        {/* Buscador por Nombre, CC o Cargo */}
+                        <div className="relative">
+                          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                          <input
+                            type="text"
+                            placeholder="Buscar líder por nombre, CC o cargo..."
+                            value={manualLeaderSearch}
+                            onChange={(e) => setManualLeaderSearch(e.target.value)}
+                            className="w-full pl-8.5 pr-8 py-2 rounded-xl border bg-card text-xs focus:outline-none focus:ring-2 focus:ring-[#012169]/30"
+                          />
+                          {manualLeaderSearch && (
+                            <button
+                              type="button"
+                              onClick={() => setManualLeaderSearch("")}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Filtro por Cargo de Líder */}
+                        <select
+                          value={manualLeaderPositionFilter}
+                          onChange={(e) => setManualLeaderPositionFilter(e.target.value)}
+                          className="w-full rounded-xl border bg-card px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-[#012169]/30"
+                        >
+                          <option value="todos">Todos los cargos de líderes ({leadersList.length})</option>
+                          {uniqueLeaderPositions.map((pos) => (
+                            <option key={pos} value={pos}>
+                              {pos}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Lista de Líderes Filtrados con Selección y Drag & Drop Target */}
+                      <div className="max-h-[280px] overflow-y-auto rounded-xl border divide-y bg-card">
+                        {filteredLeadersForManual.length === 0 ? (
+                          <div className="p-6 text-center text-xs text-muted-foreground space-y-1">
+                            <Briefcase className="w-5 h-5 mx-auto opacity-40 mb-1" />
+                            <p className="font-semibold">No se encontraron líderes</p>
+                            <p className="text-[11px]">Intenta ajustar el texto o filtro de cargo.</p>
+                          </div>
+                        ) : (
+                          filteredLeadersForManual.map((leader) => {
+                            const isSelected = manualLeaderId === leader.id;
+                            return (
+                              <div
+                                key={leader.id}
+                                onClick={() => setManualLeaderId(leader.id)}
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  e.dataTransfer.dropEffect = "copy";
+                                }}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  setManualLeaderId(leader.id);
+                                  const collabId = e.dataTransfer.getData("text/plain");
+                                  if (collabId) {
+                                    setManualCollabIds((prev) =>
+                                      prev.includes(collabId) ? prev : [...prev, collabId]
+                                    );
+                                    toast.info(`Colaborador agregado a ${leader.name}`);
+                                  }
+                                }}
+                                className={cn(
+                                  "p-2.5 flex items-center justify-between gap-2.5 cursor-pointer text-xs transition-colors hover:bg-muted/50",
+                                  isSelected && "bg-[#012169]/5 dark:bg-[#012169]/20 border-l-4 border-l-[#012169]"
+                                )}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#012169] to-[#0084d5] text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                                    {leader.name
+                                      .split(" ")
+                                      .filter(Boolean)
+                                      .map((n: string) => n[0])
+                                      .join("")
+                                      .slice(0, 2)
+                                      .toUpperCase()}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p
+                                      className={cn(
+                                        "font-bold truncate text-foreground",
+                                        isSelected && "text-[#012169] dark:text-blue-400"
+                                      )}
+                                    >
+                                      {leader.name}
+                                    </p>
+                                    <p className="text-[11px] text-muted-foreground truncate">
+                                      CC: {leader.document_number} · {leader.position}
+                                    </p>
+                                  </div>
+                                </div>
+                                {isSelected ? (
+                                  <div className="w-5 h-5 rounded-full bg-[#012169] text-white flex items-center justify-center flex-shrink-0">
+                                    <Check className="w-3 h-3" />
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] font-semibold text-muted-foreground px-2 py-0.5 rounded bg-muted/70 flex-shrink-0">
+                                    {leader.role}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    {/* COLUMNA 2: COLABORADORES A ASIGNAR (7/12) */}
+                    <div className="lg:col-span-7 rounded-2xl border bg-background p-4 space-y-3 shadow-2xs">
+                      {/* Cabecera y Contador de Selección */}
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <label className="text-xs font-bold text-foreground flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-[#0084d5] text-white text-[11px] flex items-center justify-center font-extrabold">
+                            2
+                          </span>
+                          Colaboradores a Asignar
+                        </label>
+                        <span
+                          className={cn(
+                            "text-xs font-bold px-2.5 py-0.5 rounded-full transition-colors",
+                            manualCollabIds.length > 0
+                              ? "bg-[#012169] text-white"
+                              : "bg-muted text-muted-foreground"
+                          )}
+                        >
+                          {manualCollabIds.length} seleccionados
+                        </span>
+                      </div>
+
+                      {/* Buscador de Colaboradores por Texto (Nombre, CC, Cargo o Área) */}
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          type="text"
+                          placeholder="Buscar colaborador por nombre, CC, cargo o área..."
+                          value={manualCollabSearch}
+                          onChange={(e) => setManualCollabSearch(e.target.value)}
+                          className="w-full pl-8.5 pr-8 py-2 rounded-xl border bg-card text-xs focus:outline-none focus:ring-2 focus:ring-[#0084d5]/30"
+                        />
+                        {manualCollabSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setManualCollabSearch("")}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Barra de Filtros: Cargo, Estado de Asignación y Área */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {/* Filtro por Cargo */}
+                        <div>
+                          <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">
+                            Filtrar Cargo
                           </label>
-                        );
-                      })}
+                          <select
+                            value={manualCollabPositionFilter}
+                            onChange={(e) => setManualCollabPositionFilter(e.target.value)}
+                            className="w-full rounded-xl border bg-card px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-[#0084d5]/30 truncate"
+                          >
+                            <option value="todos">Todos los cargos ({collaboratorsList.length})</option>
+                            {uniqueCollabPositions.map((pos) => (
+                              <option key={pos} value={pos}>
+                                {pos}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Filtro por Estado de Asignación */}
+                        <div>
+                          <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">
+                            Estado Asignación
+                          </label>
+                          <select
+                            value={manualCollabStatusFilter}
+                            onChange={(e) => setManualCollabStatusFilter(e.target.value as any)}
+                            className="w-full rounded-xl border bg-card px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-[#0084d5]/30 truncate"
+                          >
+                            <option value="todos">Todos los estados</option>
+                            <option value="sin_asignar">
+                              Solo Sin Asignar ({collaboratorsList.filter((c) => !c.isAssigned).length})
+                            </option>
+                            <option value="asignados">
+                              Ya Asignados ({collaboratorsList.filter((c) => c.isAssigned).length})
+                            </option>
+                          </select>
+                        </div>
+
+                        {/* Filtro por Área */}
+                        <div>
+                          <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">
+                            Filtrar Área
+                          </label>
+                          <select
+                            value={manualCollabAreaFilter}
+                            onChange={(e) => setManualCollabAreaFilter(e.target.value)}
+                            className="w-full rounded-xl border bg-card px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-[#0084d5]/30 truncate"
+                          >
+                            <option value="todos">Todas las áreas</option>
+                            {uniqueCollabAreas.map((area) => (
+                              <option key={area} value={area}>
+                                {area}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Herramientas de Selección en Lote */}
+                      <div className="flex items-center justify-between text-xs pt-1 flex-wrap gap-2 border-t border-border/40">
+                        <span className="text-[11px] text-muted-foreground">
+                          Mostrando <strong className="text-foreground">{filteredCollabsForManual.length}</strong> de{" "}
+                          {collaboratorsList.length} colaboradores
+                        </span>
+
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={handleSelectAllVisibleCollabs}
+                            disabled={filteredCollabsForManual.length === 0}
+                            className="px-2.5 py-1 rounded-lg border bg-card text-[11px] font-semibold text-foreground hover:bg-muted transition-colors disabled:opacity-40 cursor-pointer"
+                          >
+                            Seleccionar visibles ({filteredCollabsForManual.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleDeselectAllVisibleCollabs}
+                            disabled={filteredCollabsForManual.length === 0}
+                            className="px-2 py-1 rounded-lg border bg-card text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-40 cursor-pointer"
+                          >
+                            Deseleccionar visibles
+                          </button>
+                          {manualCollabIds.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={handleClearAllSelectedCollabs}
+                              className="px-2 py-1 rounded-lg text-[11px] font-semibold text-danger-600 hover:bg-danger-500/10 transition-colors cursor-pointer"
+                            >
+                              Limpiar todo
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Lista de Colaboradores con Checkbox y Soporte para Arrastrar */}
+                      <div className="max-h-[300px] overflow-y-auto rounded-xl border divide-y bg-card">
+                        {filteredCollabsForManual.length === 0 ? (
+                          <div className="p-8 text-center text-xs text-muted-foreground space-y-1">
+                            <Users className="w-6 h-6 mx-auto opacity-40 mb-1" />
+                            <p className="font-bold text-foreground">No se encontraron colaboradores</p>
+                            <p className="text-[11px]">
+                              Prueba cambiando el texto de búsqueda o los filtros de cargo/área.
+                            </p>
+                          </div>
+                        ) : (
+                          filteredCollabsForManual.map((collab) => {
+                            const isChecked = manualCollabIds.includes(collab.id);
+                            return (
+                              <div
+                                key={collab.id}
+                                draggable
+                                onDragStart={(e) => {
+                                  e.dataTransfer.setData("text/plain", collab.id);
+                                }}
+                                onClick={() => {
+                                  if (isChecked) {
+                                    setManualCollabIds((prev) => prev.filter((id) => id !== collab.id));
+                                  } else {
+                                    setManualCollabIds((prev) => [...prev, collab.id]);
+                                  }
+                                }}
+                                className={cn(
+                                  "p-2.5 flex items-center justify-between gap-3 cursor-pointer text-xs transition-colors hover:bg-muted/40 select-none",
+                                  isChecked && "bg-blue-50/70 dark:bg-blue-950/30"
+                                )}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => {}} // Manejado por onClick del contenedor
+                                    className="rounded border-slate-300 text-[#012169] focus:ring-0 cursor-pointer w-4 h-4 flex-shrink-0"
+                                  />
+                                  <div className="w-7 h-7 rounded-lg bg-muted text-muted-foreground flex items-center justify-center font-bold text-[10px] flex-shrink-0">
+                                    {collab.full_name
+                                      .split(" ")
+                                      .filter(Boolean)
+                                      .map((n: string) => n[0])
+                                      .join("")
+                                      .slice(0, 2)
+                                      .toUpperCase()}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="font-bold text-foreground truncate">{collab.full_name}</p>
+                                    <p className="text-[11px] text-muted-foreground truncate">
+                                      CC: {collab.document_number} ·{" "}
+                                      <span className="font-semibold text-foreground/80">{collab.position}</span> ·{" "}
+                                      {collab.area}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Estado actual de asignación */}
+                                <div className="flex-shrink-0">
+                                  {collab.isAssigned ? (
+                                    <span
+                                      className={cn(
+                                        "text-[10px] font-semibold px-2 py-0.5 rounded-md block whitespace-nowrap",
+                                        collab.assignedLeaderId === manualLeaderId
+                                          ? "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
+                                          : "bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300"
+                                      )}
+                                      title={
+                                        collab.assignedLeaderId === manualLeaderId
+                                          ? "Ya asignado a este líder"
+                                          : `Asignado a: ${collab.assignedLeaderName}`
+                                      }
+                                    >
+                                      {collab.assignedLeaderId === manualLeaderId
+                                        ? "Asignado a este líder"
+                                        : `Asignado a: ${collab.assignedLeaderName?.split(" ")[0]}`}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-md whitespace-nowrap">
+                                      Sin asignar
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Notas */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-foreground">Notas u Observaciones (Opcional)</label>
+                  {/* Notas u Observaciones */}
+                  <div className="space-y-1.5 pt-2 border-t">
+                    <label className="text-xs font-semibold text-foreground">
+                      Notas u Observaciones de la Asignación (Opcional)
+                    </label>
                     <input
                       type="text"
-                      placeholder="Ej. Asignación directa por cambio de área..."
+                      placeholder="Ej. Asignación directa según estructura operativa 2026..."
                       value={manualNotes}
                       onChange={(e) => setManualNotes(e.target.value)}
                       className="w-full rounded-xl border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#012169]/30"
                     />
                   </div>
-                </>
-              )}
+                </div>
 
-              <div className="pt-3 border-t flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowManualModal(false)}
-                  className="px-4 py-2 rounded-xl border text-xs font-semibold hover:bg-accent transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingManual || manualCollabIds.length === 0 || !manualLeaderId}
-                  className="px-4 py-2 rounded-xl bg-[#012169] text-white text-xs font-semibold hover:bg-[#012169]/90 disabled:opacity-50 transition-colors shadow-xs"
-                >
-                  {savingManual ? "Guardando..." : `Asignar ${manualCollabIds.length} Colaboradores`}
-                </button>
-              </div>
-            </form>
+                {/* Footer Modal con Resumen de Asignación */}
+                <div className="p-4 sm:p-5 border-t bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="text-xs text-muted-foreground w-full sm:w-auto text-left">
+                    {selectedLeaderObj ? (
+                      <p>
+                        Líder evaluador: <strong className="text-foreground">{selectedLeaderObj.name}</strong> ·{" "}
+                        <strong className="text-[#012169] dark:text-blue-400">{manualCollabIds.length}</strong> colaboradores seleccionados
+                      </p>
+                    ) : (
+                      <p className="text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1.5">
+                        <AlertCircle className="w-4 h-4" /> Selecciona un líder evaluador en el panel izquierdo
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setShowManualModal(false)}
+                      className="px-4 py-2 rounded-xl border text-xs font-semibold hover:bg-accent transition-colors cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingManual || manualCollabIds.length === 0 || !manualLeaderId}
+                      className="px-5 py-2.5 rounded-xl bg-[#012169] text-white text-xs font-semibold hover:bg-[#012169]/90 disabled:opacity-50 transition-colors shadow-xs cursor-pointer flex items-center gap-2"
+                    >
+                      {savingManual ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <span>Guardando Asignaciones...</span>
+                        </>
+                      ) : (
+                        <>
+                          <UserCheck className="w-4 h-4" />
+                          <span>
+                            {manualCollabIds.length === 0
+                              ? "Selecciona colaboradores"
+                              : `Asignar ${manualCollabIds.length} Colaborador${manualCollabIds.length > 1 ? "es" : ""}`}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -1455,40 +1976,94 @@ CREATE POLICY "Líderes pueden ver sus evaluaciones asignadas" ON evaluation_ass
               </p>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-xs font-semibold text-foreground">Seleccione el Nuevo Líder Evaluador</label>
-              <select
-                id="select-new-leader"
-                className="w-full rounded-xl border bg-background px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#012169]/30"
-              >
-                <option value="">Seleccione...</option>
-                {leadersList
-                  .filter((l) => l.id !== selectedAssignmentForReassign.evaluator_id)
-                  .map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name} — {l.position}
-                    </option>
-                  ))}
-              </select>
+              
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Buscar líder por nombre, CC o cargo..."
+                  value={reassignSearch}
+                  onChange={(e) => setReassignSearch(e.target.value)}
+                  className="w-full pl-8.5 pr-8 py-2 rounded-xl border bg-card text-xs focus:outline-none focus:ring-2 focus:ring-[#012169]/30"
+                />
+                {reassignSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setReassignSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="max-h-52 overflow-y-auto rounded-xl border divide-y bg-background">
+                {filteredLeadersForReassign.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-muted-foreground">
+                    No se encontraron líderes con los filtros actuales.
+                  </div>
+                ) : (
+                  filteredLeadersForReassign.map((leader) => {
+                    const isSelected = reassignNewLeaderId === leader.id;
+                    return (
+                      <div
+                        key={leader.id}
+                        onClick={() => setReassignNewLeaderId(leader.id)}
+                        className={cn(
+                          "p-2.5 flex items-center justify-between gap-2.5 cursor-pointer text-xs transition-colors hover:bg-muted/50",
+                          isSelected && "bg-[#012169]/5 dark:bg-[#012169]/20 border-l-4 border-l-[#012169]"
+                        )}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#012169] to-[#0084d5] text-white flex items-center justify-center font-bold text-[11px] flex-shrink-0">
+                            {leader.name.split(" ").filter(Boolean).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className={cn("font-bold truncate text-foreground", isSelected && "text-[#012169] dark:text-blue-400")}>
+                              {leader.name}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              CC: {leader.document_number} · {leader.position}
+                            </p>
+                          </div>
+                        </div>
+                        {isSelected ? (
+                          <div className="w-4 h-4 rounded-full bg-[#012169] text-white flex items-center justify-center flex-shrink-0">
+                            <Check className="w-2.5 h-2.5" />
+                          </div>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-muted-foreground px-1.5 py-0.5 rounded bg-muted">
+                            {leader.role}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
 
-            <div className="pt-2 flex items-center justify-end gap-2">
+            <div className="pt-2 flex items-center justify-end gap-2 border-t">
               <button
+                type="button"
                 onClick={() => setShowReassignModal(false)}
-                className="px-3 py-1.5 rounded-xl border text-xs font-semibold hover:bg-accent"
+                className="px-3 py-1.5 rounded-xl border text-xs font-semibold hover:bg-accent cursor-pointer"
               >
                 Cancelar
               </button>
               <button
+                type="button"
+                disabled={!reassignNewLeaderId}
                 onClick={() => {
-                  const selectEl = document.getElementById("select-new-leader") as HTMLSelectElement;
-                  if (!selectEl?.value) {
+                  if (!reassignNewLeaderId) {
                     toast.error("Seleccione el nuevo líder evaluador.");
                     return;
                   }
-                  handleReassign(selectEl.value);
+                  handleReassign(reassignNewLeaderId);
                 }}
-                className="px-3.5 py-1.5 rounded-xl bg-[#012169] text-white text-xs font-semibold hover:bg-[#012169]/90 shadow-xs"
+                className="px-3.5 py-1.5 rounded-xl bg-[#012169] text-white text-xs font-semibold hover:bg-[#012169]/90 disabled:opacity-50 transition-colors shadow-xs cursor-pointer"
               >
                 Confirmar Reasignación
               </button>
