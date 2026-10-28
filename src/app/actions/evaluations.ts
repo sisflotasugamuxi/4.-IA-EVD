@@ -1013,15 +1013,33 @@ export async function getLeaderProfiles(): Promise<{ data: { id: string; name: s
   }
 }
 
+export interface LeaderAssignedCollaboratorItem {
+  assignmentId: string;
+  collaboratorId: string;
+  collaboratorName: string;
+  documentNumber: string;
+  position: string;
+  area: string;
+  isCompleted: boolean;
+  evaluationStatus: "finalizada" | "pendiente_firma" | "en_proceso" | "borrador" | "pendiente";
+  score: number | null;
+  evaluationDate: string | null;
+}
+
 export interface LeaderReportItem {
   id: string;
   name: string;
   firstName: string;
   lastName: string;
+  documentNumber?: string;
   email: string;
   phone: string | null;
   position: string;
   active: boolean;
+  assignedCount: number;
+  completedAssignedCount: number;
+  missingCount: number;
+  compliancePercentage: number;
   totalEvaluations: number;
   finalizedCount: number;
   pendingSignatureCount: number;
@@ -1030,9 +1048,10 @@ export interface LeaderReportItem {
   averageScore: number;
   hasEvaluations: boolean;
   lastEvaluationDate: string | null;
+  assignedCollaborators: LeaderAssignedCollaboratorItem[];
 }
 
-export async function getLeadersReportData(): Promise<{
+export async function getLeadersReportData(year?: number): Promise<{
   data: LeaderReportItem[];
   summary: {
     totalLeaders: number;
@@ -1040,40 +1059,83 @@ export async function getLeadersReportData(): Promise<{
     leadersWithoutEvaluations: number;
     totalEvaluations: number;
     completionPercentage: number;
+    totalAssigned: number;
+    totalCompletedAssigned: number;
+    totalMissingAssigned: number;
+    overallAssignmentCompliance: number;
+    leadersWithMissingEvaluations: number;
   };
   error?: string;
 }> {
+  const emptySummary = {
+    totalLeaders: 0,
+    leadersWithEvaluations: 0,
+    leadersWithoutEvaluations: 0,
+    totalEvaluations: 0,
+    completionPercentage: 0,
+    totalAssigned: 0,
+    totalCompletedAssigned: 0,
+    totalMissingAssigned: 0,
+    overallAssignmentCompliance: 0,
+    leadersWithMissingEvaluations: 0,
+  };
+
   try {
     const supabase = await getSupabaseAdmin();
-    
-    // 1. Fetch all leader profiles with positions and document number
-    const { data: leaders, error: leadersError } = await supabase
-      .from("profiles")
-      .select(`
-        id, first_name, last_name, email, phone, active, document_number,
-        roles!inner(id, name, display_name),
-        positions(id, name)
-      `)
-      .eq("roles.name", "lider")
-      .order("first_name", { ascending: true });
+    const currentYear = year || new Date().getFullYear();
 
-    if (leadersError) {
-      console.error("Error fetching leaders for report:", leadersError);
+    // 1. Fetch profiles, collaborators, assignments and evaluations in parallel
+    const [profilesRes, collabsRes, assignmentsRes, evaluationsRes] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select(`
+          id, first_name, last_name, email, phone, active, document_number,
+          roles!inner(id, name, display_name),
+          positions(id, name)
+        `)
+        .order("first_name", { ascending: true }),
+      supabase
+        .from("collaborators")
+        .select("id, full_name, first_name, last_name, document_number, email, positions(name), areas(name)"),
+      supabase
+        .from("evaluation_assignments")
+        .select("id, evaluator_id, collaborator_id, evaluation_id, status, evaluation_year")
+        .eq("evaluation_year", currentYear),
+      supabase
+        .from("evaluations")
+        .select(`
+          id,
+          evaluator_id,
+          evaluatee_id,
+          evaluation_year,
+          status,
+          created_at,
+          finalized_at,
+          result:evaluation_results(overall_average, result)
+        `),
+    ]);
+
+    if (profilesRes.error) {
+      console.error("Error fetching leaders for report:", profilesRes.error);
       return {
         data: [],
-        summary: { totalLeaders: 0, leadersWithEvaluations: 0, leadersWithoutEvaluations: 0, totalEvaluations: 0, completionPercentage: 0 },
-        error: leadersError.message
+        summary: emptySummary,
+        error: profilesRes.error.message,
       };
     }
 
-    // 2. Fallback positions lookup from collaborators table by doc or email
-    const { data: collabs } = await supabase
-      .from("collaborators")
-      .select("document_number, email, positions(name)");
+    const allProfiles = profilesRes.data || [];
+    const collabs = collabsRes.data || [];
+    const assignments = assignmentsRes.data || [];
+    const evaluations = evaluationsRes.data || [];
 
+    // 2. Lookup maps for collaborators
+    const collabsById: Record<string, any> = {};
     const collabsByDoc: Record<string, string> = {};
     const collabsByEmail: Record<string, string> = {};
-    (collabs || []).forEach((c: any) => {
+
+    collabs.forEach((c: any) => {
+      collabsById[c.id] = c;
       const pName = Array.isArray(c.positions) ? c.positions[0]?.name : c.positions?.name;
       if (pName) {
         if (c.document_number) collabsByDoc[c.document_number] = pName;
@@ -1081,37 +1143,51 @@ export async function getLeadersReportData(): Promise<{
       }
     });
 
-    // 3. Fetch all evaluations with status and results
-    const { data: evaluations, error: evalError } = await supabase
-      .from("evaluations")
-      .select(`
-        id,
-        evaluator_id,
-        status,
-        created_at,
-        finalized_at,
-        result:evaluation_results(overall_average, result)
-      `);
-
-    if (evalError) {
-      console.error("Error fetching evaluations for leaders report:", evalError);
-    }
-
+    // 3. Map evaluations by evaluatee_id (current year prioritized) and by evaluator_id
     const evalsByLeader: Record<string, any[]> = {};
-    (evaluations || []).forEach((ev) => {
+    const evalByCollabId: Record<string, any> = {};
+
+    evaluations.forEach((ev: any) => {
       if (ev.evaluator_id) {
         if (!evalsByLeader[ev.evaluator_id]) {
           evalsByLeader[ev.evaluator_id] = [];
         }
         evalsByLeader[ev.evaluator_id].push(ev);
       }
+      const evYear = ev.evaluation_year || (ev.created_at ? new Date(ev.created_at).getFullYear() : currentYear);
+      const collabId = ev.evaluatee_id || ev.collaborator_id;
+      if (collabId && Number(evYear) === currentYear) {
+        const existing = evalByCollabId[collabId];
+        if (!existing || ev.status === "finalizada" || ev.status === "pendiente_firma") {
+          evalByCollabId[collabId] = ev;
+        }
+      }
     });
 
-    const reportItems: LeaderReportItem[] = (leaders || []).map((l: any) => {
+    // 4. Group assignments by evaluator_id
+    const assignmentsByLeader: Record<string, any[]> = {};
+    assignments.forEach((asg: any) => {
+      if (asg.evaluator_id) {
+        if (!assignmentsByLeader[asg.evaluator_id]) {
+          assignmentsByLeader[asg.evaluator_id] = [];
+        }
+        assignmentsByLeader[asg.evaluator_id].push(asg);
+      }
+    });
+
+    // Include profiles with role 'lider' OR any profile that has assignments or evaluations
+    const leaders = allProfiles.filter((p: any) => {
+      const roleName = Array.isArray(p.roles) ? p.roles[0]?.name : p.roles?.name;
+      const hasAssigned = (assignmentsByLeader[p.id] || []).length > 0;
+      const hasEvals = (evalsByLeader[p.id] || []).length > 0;
+      return roleName === "lider" || hasAssigned || hasEvals;
+    });
+
+    const reportItems: LeaderReportItem[] = leaders.map((l: any) => {
       const fullName = `${l.first_name || ""} ${l.last_name || ""}`.replace(/\s+/g, " ").trim();
       const myEvals = evalsByLeader[l.id] || [];
-      const total = myEvals.length;
-      
+      const myAssignments = assignmentsByLeader[l.id] || [];
+
       const posObj = Array.isArray(l.positions) ? l.positions[0] : l.positions;
       let posName = posObj?.name || "";
       if (!posName && l.document_number && collabsByDoc[l.document_number]) {
@@ -1122,30 +1198,118 @@ export async function getLeadersReportData(): Promise<{
       }
       if (!posName) posName = "Sin Cargo Asignado";
 
-      const finalized = myEvals.filter((e) => e.status === "finalizada").length;
-      const pendingSig = myEvals.filter((e) => e.status === "pendiente_firma").length;
-      const inProgress = myEvals.filter((e) => e.status === "en_proceso").length;
-      const draft = myEvals.filter((e) => e.status === "borrador").length;
+      // Build detailed assigned collaborators list cross-referenced with evaluations
+      const assignedCollaborators: LeaderAssignedCollaboratorItem[] = myAssignments.map((asg: any) => {
+        const col = collabsById[asg.collaborator_id];
+        const colName = col
+          ? (col.full_name || `${col.first_name || ""} ${col.last_name || ""}`.trim())
+          : "Colaborador";
+        const colDoc = col?.document_number || "—";
+        const colPos = col
+          ? (Array.isArray(col.positions) ? col.positions[0]?.name : col.positions?.name) || "Sin Cargo"
+          : "Sin Cargo";
+        const colArea = col
+          ? (Array.isArray(col.areas) ? col.areas[0]?.name : col.areas?.name) || "Sin Área"
+          : "Sin Área";
+
+        // Match evaluation by evaluatee_id or evaluation_id
+        const matchedEval =
+          evalByCollabId[asg.collaborator_id] ||
+          myEvals.find((e) => (e.evaluatee_id || e.collaborator_id) === asg.collaborator_id || e.id === asg.evaluation_id);
+
+        const rawStatus = matchedEval?.status || asg.status || "pendiente";
+        const isCompleted =
+          rawStatus === "finalizada" ||
+          rawStatus === "pendiente_firma" ||
+          rawStatus === "completada" ||
+          rawStatus === "aprobada";
+
+        const resObj = matchedEval?.result
+          ? (Array.isArray(matchedEval.result) ? matchedEval.result[0] : matchedEval.result)
+          : null;
+        const scoreVal = resObj && resObj.overall_average != null ? Number(resObj.overall_average) : null;
+        const evalDate = matchedEval ? (matchedEval.finalized_at || matchedEval.created_at || null) : null;
+
+        let normalizedStatus: "finalizada" | "pendiente_firma" | "en_proceso" | "borrador" | "pendiente" = "pendiente";
+        if (rawStatus === "finalizada") normalizedStatus = "finalizada";
+        else if (rawStatus === "pendiente_firma") normalizedStatus = "pendiente_firma";
+        else if (rawStatus === "en_proceso") normalizedStatus = "en_proceso";
+        else if (rawStatus === "borrador") normalizedStatus = "borrador";
+
+        return {
+          assignmentId: asg.id,
+          collaboratorId: asg.collaborator_id,
+          collaboratorName: colName,
+          documentNumber: colDoc,
+          position: colPos,
+          area: colArea,
+          isCompleted,
+          evaluationStatus: normalizedStatus,
+          score: scoreVal && !isNaN(scoreVal) ? Number(scoreVal.toFixed(2)) : null,
+          evaluationDate: evalDate,
+        };
+      });
+
+      // Sort assignedCollaborators: missing/pending first, then alphabetically
+      assignedCollaborators.sort((a, b) => {
+        if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1;
+        return a.collaboratorName.localeCompare(b.collaboratorName);
+      });
+
+      const assignedCount = assignedCollaborators.length;
+      const completedAssignedCount = assignedCollaborators.filter((c) => c.isCompleted).length;
+      const missingCount = Math.max(0, assignedCount - completedAssignedCount);
+
+      // Count evaluations from both direct evaluator_id and completed assignments
+      const finalizedFromAsg = assignedCollaborators.filter((c) => c.evaluationStatus === "finalizada").length;
+      const pendingSigFromAsg = assignedCollaborators.filter((c) => c.evaluationStatus === "pendiente_firma").length;
+      const inProgressFromAsg = assignedCollaborators.filter((c) => c.evaluationStatus === "en_proceso").length;
+      const draftFromAsg = assignedCollaborators.filter((c) => c.evaluationStatus === "borrador").length;
+
+      const finalized = Math.max(myEvals.filter((e) => e.status === "finalizada").length, finalizedFromAsg);
+      const pendingSig = Math.max(myEvals.filter((e) => e.status === "pendiente_firma").length, pendingSigFromAsg);
+      const inProgress = Math.max(myEvals.filter((e) => e.status === "en_proceso").length, inProgressFromAsg);
+      const draft = Math.max(myEvals.filter((e) => e.status === "borrador").length, draftFromAsg);
+      const total = Math.max(myEvals.length, completedAssignedCount);
+
+      const compliancePercentage =
+        assignedCount > 0
+          ? Number(((completedAssignedCount / assignedCount) * 100).toFixed(1))
+          : total > 0
+          ? 100
+          : 0;
 
       let scoreSum = 0;
       let scoreCount = 0;
       let lastDate: string | null = null;
 
-      myEvals.forEach((e) => {
-        const dateVal = e.finalized_at || e.created_at;
-        if (dateVal && (!lastDate || new Date(dateVal) > new Date(lastDate))) {
-          lastDate = dateVal;
-        }
+      if (myEvals.length > 0) {
+        myEvals.forEach((e) => {
+          const dateVal = e.finalized_at || e.created_at;
+          if (dateVal && (!lastDate || new Date(dateVal) > new Date(lastDate))) {
+            lastDate = dateVal;
+          }
 
-        const resObj = Array.isArray(e.result) ? e.result[0] : e.result;
-        if (resObj && resObj.overall_average != null) {
-          const score = Number(resObj.overall_average);
-          if (!isNaN(score) && score > 0) {
-            scoreSum += score;
+          const resObj = Array.isArray(e.result) ? e.result[0] : e.result;
+          if (resObj && resObj.overall_average != null) {
+            const score = Number(resObj.overall_average);
+            if (!isNaN(score) && score > 0) {
+              scoreSum += score;
+              scoreCount++;
+            }
+          }
+        });
+      } else {
+        assignedCollaborators.forEach((ac) => {
+          if (ac.evaluationDate && (!lastDate || new Date(ac.evaluationDate) > new Date(lastDate))) {
+            lastDate = ac.evaluationDate;
+          }
+          if (ac.score != null && ac.score > 0) {
+            scoreSum += ac.score;
             scoreCount++;
           }
-        }
-      });
+        });
+      }
 
       const avgScore = scoreCount > 0 ? Number((scoreSum / scoreCount).toFixed(2)) : 0;
 
@@ -1154,10 +1318,15 @@ export async function getLeadersReportData(): Promise<{
         name: fullName,
         firstName: l.first_name || "",
         lastName: l.last_name || "",
+        documentNumber: l.document_number || "—",
         email: l.email || "—",
         phone: l.phone || null,
         position: posName,
         active: l.active !== false,
+        assignedCount,
+        completedAssignedCount,
+        missingCount,
+        compliancePercentage,
         totalEvaluations: total,
         finalizedCount: finalized,
         pendingSignatureCount: pendingSig,
@@ -1166,14 +1335,14 @@ export async function getLeadersReportData(): Promise<{
         averageScore: avgScore,
         hasEvaluations: total > 0,
         lastEvaluationDate: lastDate,
+        assignedCollaborators,
       };
     });
 
-    // Sort by total evaluations descending by default, then alphabetically
+    // Sort by assignedCount desc, then missingCount desc, then totalEvaluations desc
     reportItems.sort((a, b) => {
-      if (b.totalEvaluations !== a.totalEvaluations) {
-        return b.totalEvaluations - a.totalEvaluations;
-      }
+      if (b.assignedCount !== a.assignedCount) return b.assignedCount - a.assignedCount;
+      if (b.totalEvaluations !== a.totalEvaluations) return b.totalEvaluations - a.totalEvaluations;
       return a.name.localeCompare(b.name);
     });
 
@@ -1181,7 +1350,15 @@ export async function getLeadersReportData(): Promise<{
     const leadersWithEvaluations = reportItems.filter((l) => l.hasEvaluations).length;
     const leadersWithoutEvaluations = totalLeaders - leadersWithEvaluations;
     const totalEvalsCount = reportItems.reduce((acc, curr) => acc + curr.totalEvaluations, 0);
-    const completionPercentage = totalLeaders > 0 ? Number(((leadersWithEvaluations / totalLeaders) * 100).toFixed(1)) : 0;
+    const completionPercentage =
+      totalLeaders > 0 ? Number(((leadersWithEvaluations / totalLeaders) * 100).toFixed(1)) : 0;
+
+    const totalAssigned = reportItems.reduce((acc, curr) => acc + curr.assignedCount, 0);
+    const totalCompletedAssigned = reportItems.reduce((acc, curr) => acc + curr.completedAssignedCount, 0);
+    const totalMissingAssigned = reportItems.reduce((acc, curr) => acc + curr.missingCount, 0);
+    const overallAssignmentCompliance =
+      totalAssigned > 0 ? Number(((totalCompletedAssigned / totalAssigned) * 100).toFixed(1)) : 0;
+    const leadersWithMissingEvaluations = reportItems.filter((l) => l.missingCount > 0).length;
 
     return {
       data: reportItems,
@@ -1191,13 +1368,18 @@ export async function getLeadersReportData(): Promise<{
         leadersWithoutEvaluations,
         totalEvaluations: totalEvalsCount,
         completionPercentage,
+        totalAssigned,
+        totalCompletedAssigned,
+        totalMissingAssigned,
+        overallAssignmentCompliance,
+        leadersWithMissingEvaluations,
       },
     };
   } catch (err: any) {
     console.error("Exception in getLeadersReportData:", err);
     return {
       data: [],
-      summary: { totalLeaders: 0, leadersWithEvaluations: 0, leadersWithoutEvaluations: 0, totalEvaluations: 0, completionPercentage: 0 },
+      summary: emptySummary,
       error: err?.message || "Error al obtener informe de líderes",
     };
   }

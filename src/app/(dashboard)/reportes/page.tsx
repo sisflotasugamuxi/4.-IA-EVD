@@ -68,8 +68,8 @@ function isEvdRequired(hireDateStr?: string | null): boolean {
 }
 
 export default function ReportesPage() {
-  // Navigation: active module
-  const [activeReport, setActiveReport] = useState<"consolidado" | "pmi" | "lideres" | "ejecutivo">("consolidado");
+  // Navigation: active module (inicia en "lideres" por defecto)
+  const [activeReport, setActiveReport] = useState<"lideres" | "consolidado" | "pmi" | "ejecutivo">("lideres");
 
   // General shared data
   const [areas, setAreas] = useState<AreaData[]>([]);
@@ -83,7 +83,14 @@ export default function ReportesPage() {
     leadersWithoutEvaluations: 0,
     totalEvaluations: 0,
     completionPercentage: 0,
+    totalAssigned: 0,
+    totalCompletedAssigned: 0,
+    totalMissingAssigned: 0,
+    overallAssignmentCompliance: 0,
+    leadersWithMissingEvaluations: 0,
   });
+  const [expandedLeaderId, setExpandedLeaderId] = useState<string | null>(null);
+  const [detailFilterTab, setDetailFilterTab] = useState<"all" | "missing" | "completed">("all");
 
   const [isLoading, setIsLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -286,12 +293,16 @@ export default function ReportesPage() {
   const totalPagesPmi = Math.ceil(filteredPmi.length / pageSizePmi) || 1;
 
   // =========================================================================
-  // MÓDULO 3: FILTROS Y ESTADOS DE GESTIÓN POR LÍDER
+  // MÓDULO 3: FILTROS Y ESTADOS DE GESTIÓN POR LÍDER (ASIGNADAS, REALIZADAS Y FALTANTES)
   // =========================================================================
   const [searchLeader, setSearchLeader] = useState("");
   const [selectedPositionsLeader, setSelectedPositionsLeader] = useState<string[]>([]);
-  const [leaderStatusFilter, setLeaderStatusFilter] = useState<"all" | "with_evals" | "without_evals">("all");
-  const [leaderSortOrder, setLeaderSortOrder] = useState<"evals_desc" | "evals_asc" | "name_asc" | "name_desc" | "score_desc">("evals_desc");
+  const [leaderStatusFilter, setLeaderStatusFilter] = useState<
+    "all" | "missing_evals" | "completed_all" | "with_evals" | "without_evals"
+  >("all");
+  const [leaderSortOrder, setLeaderSortOrder] = useState<
+    "missing_desc" | "assigned_desc" | "compliance_desc" | "evals_desc" | "evals_asc" | "name_asc" | "name_desc" | "score_desc"
+  >("missing_desc");
   const [pageLeaders, setPageLeaders] = useState(1);
   const pageSizeLeaders = 10;
 
@@ -307,15 +318,21 @@ export default function ReportesPage() {
   }, [leadersData]);
 
   const filteredLeaders = useMemo(() => {
-    let result = leadersData.filter((item) => {
-      // Text search: Name, Email or Position
+    const result = leadersData.filter((item) => {
+      // Text search: Name, Document, Email, Position, or Assigned Collaborator Name/Doc
       if (searchLeader) {
         const q = searchLeader.toLowerCase();
-        const matches =
+        const matchesLeader =
           item.name.toLowerCase().includes(q) ||
+          (item.documentNumber || "").toLowerCase().includes(q) ||
           item.email.toLowerCase().includes(q) ||
           (item.position || "").toLowerCase().includes(q);
-        if (!matches) return false;
+        const matchesAssignedCollab = (item.assignedCollaborators || []).some(
+          (ac) =>
+            ac.collaboratorName.toLowerCase().includes(q) ||
+            (ac.documentNumber || "").toLowerCase().includes(q)
+        );
+        if (!matchesLeader && !matchesAssignedCollab) return false;
       }
 
       // Position filter
@@ -324,6 +341,8 @@ export default function ReportesPage() {
       }
 
       // Status filter
+      if (leaderStatusFilter === "missing_evals" && item.missingCount === 0) return false;
+      if (leaderStatusFilter === "completed_all" && !(item.assignedCount > 0 && item.missingCount === 0)) return false;
       if (leaderStatusFilter === "with_evals" && !item.hasEvaluations) return false;
       if (leaderStatusFilter === "without_evals" && item.hasEvaluations) return false;
 
@@ -332,11 +351,20 @@ export default function ReportesPage() {
 
     // Sorting
     result.sort((a, b) => {
-      if (leaderSortOrder === "evals_desc") return b.totalEvaluations - a.totalEvaluations || a.name.localeCompare(b.name);
-      if (leaderSortOrder === "evals_asc") return a.totalEvaluations - b.totalEvaluations || a.name.localeCompare(b.name);
+      if (leaderSortOrder === "missing_desc")
+        return b.missingCount - a.missingCount || b.assignedCount - a.assignedCount || a.name.localeCompare(b.name);
+      if (leaderSortOrder === "assigned_desc")
+        return b.assignedCount - a.assignedCount || b.missingCount - a.missingCount || a.name.localeCompare(b.name);
+      if (leaderSortOrder === "compliance_desc")
+        return b.compliancePercentage - a.compliancePercentage || b.totalEvaluations - a.totalEvaluations;
+      if (leaderSortOrder === "evals_desc")
+        return b.totalEvaluations - a.totalEvaluations || a.name.localeCompare(b.name);
+      if (leaderSortOrder === "evals_asc")
+        return a.totalEvaluations - b.totalEvaluations || a.name.localeCompare(b.name);
       if (leaderSortOrder === "name_asc") return a.name.localeCompare(b.name);
       if (leaderSortOrder === "name_desc") return b.name.localeCompare(a.name);
-      if (leaderSortOrder === "score_desc") return b.averageScore - a.averageScore || b.totalEvaluations - a.totalEvaluations;
+      if (leaderSortOrder === "score_desc")
+        return b.averageScore - a.averageScore || b.totalEvaluations - a.totalEvaluations;
       return 0;
     });
 
@@ -622,56 +650,109 @@ export default function ReportesPage() {
     }
   };
 
-  // Export Excel: Informe de Gestión por Líder (INFORME SOLICITADO)
+  // Export Excel: Informe de Gestión por Líder (Evaluaciones Realizadas y Faltantes según Asignación)
   const handleExportLeadersExcel = (dataToExport = leadersData, isFiltered = false) => {
-    const toastId = toast.loading("Generando Excel de gestión de líderes...");
+    const toastId = toast.loading("Generando Excel de evaluaciones realizadas y faltantes por líder...");
     try {
-      // Hoja 1: Resumen General de Líderes
+      // Hoja 1: Resumen General por Líder (Asignadas, Realizadas y Faltantes)
       const summaryRows = dataToExport.map((item, idx) => ({
         "N°": idx + 1,
-        "Líder / Jefe": item.name,
+        "Documento Líder": item.documentNumber || "—",
+        "Líder / Evaluador": item.name,
         "Correo Electrónico": item.email,
         "Cargo": item.position || "Sin Cargo Asignado",
-        "Estado Gestión": item.totalEvaluations > 0 ? "Con Evaluaciones Realizadas" : "Sin Evaluaciones Realizadas",
-        "Total Evaluaciones": item.totalEvaluations,
-        "Evaluaciones Finalizadas": item.finalizedCount,
+        "Evaluaciones Asignadas": item.assignedCount,
+        "Evaluaciones Realizadas (Asignadas)": item.completedAssignedCount,
+        "Evaluaciones Faltantes (Pendientes)": item.missingCount,
+        "% Avance Asignación": `${item.compliancePercentage}%`,
+        "Total Evaluaciones Gestionadas": item.totalEvaluations,
+        "Finalizadas": item.finalizedCount,
         "Pendientes de Firma": item.pendingSignatureCount,
         "En Proceso": item.inProgressCount,
         "Borradores": item.draftCount,
         "Calificación Promedio Otorgada": item.averageScore > 0 ? item.averageScore : "N/A",
+        "Estado de Cumplimiento":
+          item.assignedCount > 0 && item.missingCount === 0
+            ? "Cumplimiento 100% (Al día)"
+            : item.missingCount > 0
+            ? `Con Faltantes (${item.missingCount} pendientes)`
+            : item.totalEvaluations > 0
+            ? "Con Evaluaciones Realizadas"
+            : "Sin Evaluaciones Asignadas/Realizadas",
         "Última Evaluación": item.lastEvaluationDate ? new Date(item.lastEvaluationDate).toLocaleDateString("es-ES") : "Ninguna",
       }));
 
-      // Hoja 2: Líderes Sin Evaluaciones Realizadas (Prioridad RRHH)
-      const withoutEvalsRows = dataToExport
-        .filter((item) => item.totalEvaluations === 0)
-        .map((item, idx) => ({
-          "N°": idx + 1,
-          "Líder / Jefe": item.name,
-          "Correo Electrónico": item.email,
-          "Cargo": item.position || "Sin Cargo Asignado",
-          "Teléfono": item.phone || "No registrado",
-          "Evaluaciones Realizadas": 0,
-          "Estado de Cumplimiento": "Pendiente por Iniciar",
-          "Alerta RRHH": "Requiere asignación y seguimiento de evaluaciones de su personal a cargo",
-        }));
+      // Hoja 2: Detalle Nominal de Evaluaciones FALTANTES (según Asignación de Evaluaciones)
+      const missingDetailRows: any[] = [];
+      let missingIdx = 1;
+      dataToExport.forEach((leader) => {
+        (leader.assignedCollaborators || [])
+          .filter((ac) => !ac.isCompleted)
+          .forEach((ac) => {
+            missingDetailRows.push({
+              "N°": missingIdx++,
+              "Documento Líder": leader.documentNumber || "—",
+              "Líder Evaluador Asignado": leader.name,
+              "Cargo Líder": leader.position || "Sin Cargo",
+              "Correo Líder": leader.email,
+              "Documento Colaborador": ac.documentNumber,
+              "Colaborador Pendiente por Evaluar": ac.collaboratorName,
+              "Cargo Colaborador": ac.position,
+              "Área Colaborador": ac.area,
+              "Estado Evaluación":
+                ac.evaluationStatus === "en_proceso"
+                  ? "En Proceso (Sin Finalizar)"
+                  : ac.evaluationStatus === "borrador"
+                  ? "Borrador"
+                  : "Faltante / Pendiente por Iniciar",
+            });
+          });
+      });
+
+      // Hoja 3: Detalle Nominal de Evaluaciones REALIZADAS (según Asignación de Evaluaciones)
+      const completedDetailRows: any[] = [];
+      let completedIdx = 1;
+      dataToExport.forEach((leader) => {
+        (leader.assignedCollaborators || [])
+          .filter((ac) => ac.isCompleted)
+          .forEach((ac) => {
+            completedDetailRows.push({
+              "N°": completedIdx++,
+              "Documento Líder": leader.documentNumber || "—",
+              "Líder Evaluador": leader.name,
+              "Cargo Líder": leader.position || "Sin Cargo",
+              "Documento Colaborador": ac.documentNumber,
+              "Colaborador Evaluado": ac.collaboratorName,
+              "Cargo Colaborador": ac.position,
+              "Área Colaborador": ac.area,
+              "Estado Evaluación": ac.evaluationStatus === "pendiente_firma" ? "Realizada (Pendiente Firma)" : "Finalizada",
+              "Puntaje Obtenido": ac.score != null ? ac.score : "—",
+              "Fecha Evaluación": ac.evaluationDate ? new Date(ac.evaluationDate).toLocaleDateString("es-ES") : "—",
+            });
+          });
+      });
 
       const workbook = XLSX.utils.book_new();
 
       const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
-      XLSX.utils.book_append_sheet(workbook, wsSummary, isFiltered ? "Líderes Filtrados" : "Gestión por Líder");
+      XLSX.utils.book_append_sheet(workbook, wsSummary, "Resumen por Líder");
 
-      if (withoutEvalsRows.length > 0) {
-        const wsPending = XLSX.utils.json_to_sheet(withoutEvalsRows);
-        XLSX.utils.book_append_sheet(workbook, wsPending, "Líderes Sin Evaluaciones");
+      if (missingDetailRows.length > 0) {
+        const wsMissing = XLSX.utils.json_to_sheet(missingDetailRows);
+        XLSX.utils.book_append_sheet(workbook, wsMissing, "Evaluaciones Faltantes");
+      }
+
+      if (completedDetailRows.length > 0) {
+        const wsCompleted = XLSX.utils.json_to_sheet(completedDetailRows);
+        XLSX.utils.book_append_sheet(workbook, wsCompleted, "Evaluaciones Realizadas");
       }
 
       const fileName = isFiltered
-        ? `Reporte_Lideres_Filtrado_${new Date().toISOString().slice(0, 10)}.xlsx`
-        : `Informe_Gestion_Lideres_EVD_${new Date().getFullYear()}.xlsx`;
+        ? `Reporte_Lideres_Asignaciones_Filtrado_${new Date().toISOString().slice(0, 10)}.xlsx`
+        : `Informe_Evaluaciones_Realizadas_y_Faltantes_Lideres_${new Date().getFullYear()}.xlsx`;
 
       XLSX.writeFile(workbook, fileName);
-      toast.success("Informe de líderes descargado exitosamente", { id: toastId });
+      toast.success("Informe de evaluaciones realizadas y faltantes descargado exitosamente", { id: toastId });
     } catch (e) {
       console.error(e);
       toast.error("Error al exportar reporte de líderes", { id: toastId });
@@ -892,7 +973,68 @@ export default function ReportesPage() {
 
       {/* Cards Selector Panel (Módulos Integrados sin Duplicidad) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Consolidado General */}
+        {/* Card 1 (Inicial): Evaluaciones por Líder (Realizadas y Faltantes según Asignación) */}
+        <div
+          onClick={() => setActiveReport("lideres")}
+          className={cn(
+            "p-5 rounded-2xl transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between group",
+            activeReport === "lideres"
+              ? "border-2 border-[#012169] dark:border-[#0084d5] bg-gradient-to-b from-[#012169]/5 to-transparent dark:from-[#0084d5]/10 shadow-md ring-2 ring-[#012169]/10"
+              : "border border-border bg-card hover:border-[#012169]/40 hover:bg-muted/20 hover:shadow-xs"
+          )}
+        >
+          {activeReport === "lideres" && (
+            <div className="absolute bottom-0 inset-x-0 h-1 bg-[#012169] dark:bg-[#0084d5]" />
+          )}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-10 h-10 rounded-xl bg-[#012169]/10 text-[#012169] dark:bg-[#0084d5]/20 dark:text-[#0084d5] flex items-center justify-center shadow-xs">
+                <Users className="w-5 h-5" />
+              </div>
+              {activeReport === "lideres" ? (
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#012169] text-white">
+                  Módulo Activo
+                </span>
+              ) : leadersSummary.totalMissingAssigned > 0 ? (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-danger-100 text-danger-700 dark:bg-danger-950/40 dark:text-danger-300">
+                  {leadersSummary.totalMissingAssigned} faltantes
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                  {leadersData.length} líderes
+                </span>
+              )}
+            </div>
+            <h3 className="font-bold text-base text-foreground mb-1">Evaluaciones por Líder</h3>
+            <p className="text-xs text-muted-foreground line-clamp-2 mb-4">
+              Informe de evaluaciones asignadas, realizadas y faltantes por cada líder evaluador.
+            </p>
+          </div>
+          <div className="flex items-center justify-between pt-3 border-t border-border/60 text-xs">
+            {activeReport === "lideres" ? (
+              <span className="flex items-center gap-1.5 font-bold text-[#012169] dark:text-[#0084d5]">
+                <span className="w-2 h-2 rounded-full bg-[#012169] dark:bg-[#0084d5] animate-pulse" />
+                Mostrando datos
+              </span>
+            ) : (
+              <span className="font-medium text-muted-foreground group-hover:text-foreground">
+                Ver y filtrar →
+              </span>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleExportLeadersExcel();
+              }}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg border border-border/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
+              title="Descargar Excel Líderes (Realizadas y Faltantes)"
+            >
+              <Download className="w-3.5 h-3.5 text-[#0084d5]" /> Excel
+            </button>
+          </div>
+        </div>
+
+        {/* Card 2: Consolidado General */}
         <div
           onClick={() => setActiveReport("consolidado")}
           className={cn(
@@ -949,7 +1091,7 @@ export default function ReportesPage() {
           </div>
         </div>
 
-        {/* Card 2: Seguimiento PMI */}
+        {/* Card 3: Seguimiento PMI */}
         <div
           onClick={() => setActiveReport("pmi")}
           className={cn(
@@ -1000,67 +1142,6 @@ export default function ReportesPage() {
               }}
               className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg border border-border/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
               title="Descargar Excel PMI"
-            >
-              <Download className="w-3.5 h-3.5 text-[#0084d5]" /> Excel
-            </button>
-          </div>
-        </div>
-
-        {/* Card 3: Evaluaciones por Líder */}
-        <div
-          onClick={() => setActiveReport("lideres")}
-          className={cn(
-            "p-5 rounded-2xl transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between group",
-            activeReport === "lideres"
-              ? "border-2 border-[#012169] dark:border-[#0084d5] bg-gradient-to-b from-[#012169]/5 to-transparent dark:from-[#0084d5]/10 shadow-md ring-2 ring-[#012169]/10"
-              : "border border-border bg-card hover:border-[#012169]/40 hover:bg-muted/20 hover:shadow-xs"
-          )}
-        >
-          {activeReport === "lideres" && (
-            <div className="absolute bottom-0 inset-x-0 h-1 bg-[#012169] dark:bg-[#0084d5]" />
-          )}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-xl bg-[#012169]/10 text-[#012169] dark:bg-[#0084d5]/20 dark:text-[#0084d5] flex items-center justify-center shadow-xs">
-                <Users className="w-5 h-5" />
-              </div>
-              {activeReport === "lideres" ? (
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#012169] text-white">
-                  Módulo Activo
-                </span>
-              ) : leadersSummary.leadersWithoutEvaluations > 0 ? (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-danger-100 text-danger-700 dark:bg-danger-950/40 dark:text-danger-300">
-                  {leadersSummary.leadersWithoutEvaluations} sin evaluar
-                </span>
-              ) : (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                  {leadersData.length} líderes
-                </span>
-              )}
-            </div>
-            <h3 className="font-bold text-base text-foreground mb-1">Evaluaciones por Líder</h3>
-            <p className="text-xs text-muted-foreground line-clamp-2 mb-4">
-              Informe de evaluaciones por líder y detección de líderes sin evaluaciones registradas.
-            </p>
-          </div>
-          <div className="flex items-center justify-between pt-3 border-t border-border/60 text-xs">
-            {activeReport === "lideres" ? (
-              <span className="flex items-center gap-1.5 font-bold text-[#012169] dark:text-[#0084d5]">
-                <span className="w-2 h-2 rounded-full bg-[#012169] dark:bg-[#0084d5] animate-pulse" />
-                Mostrando datos
-              </span>
-            ) : (
-              <span className="font-medium text-muted-foreground group-hover:text-foreground">
-                Ver y filtrar →
-              </span>
-            )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleExportLeadersExcel();
-              }}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg border border-border/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-all"
-              title="Descargar Excel Líderes"
             >
               <Download className="w-3.5 h-3.5 text-[#0084d5]" /> Excel
             </button>
@@ -1564,7 +1645,7 @@ export default function ReportesPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* MÓDULO 3: VISTA EVALUACIONES POR LÍDER (INFORME SOLICITADO)                */}
+      {/* MÓDULO 3: VISTA EVALUACIONES POR LÍDER (REALIZADAS Y FALTANTES)            */}
       {/* ========================================================================= */}
       {activeReport === "lideres" && (
         <div className="rounded-2xl border bg-card p-5 sm:p-6 shadow-sm space-y-6">
@@ -1572,10 +1653,10 @@ export default function ReportesPage() {
             <div>
               <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
                 <Users className="w-5 h-5 text-[#012169] dark:text-[#0084d5]" />
-                Informe de Gestión y Evaluaciones por Líder
+                Informe de Evaluaciones Realizadas y Faltantes por Líder
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Monitorea el avance de evaluaciones realizadas por cada líder y detecta quiénes aún no han evaluado a su personal
+                Valida las evaluaciones asignadas a cada líder en el módulo de Asignación de Evaluaciones, cuántas ha realizado y cuáles le faltan por evaluar
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1591,62 +1672,69 @@ export default function ReportesPage() {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#012169] text-white text-xs font-semibold shadow hover:bg-[#012169]/90 transition-colors"
               >
                 <Download className="w-3.5 h-3.5" />
-                Descargar Informe Completo
+                Descargar Informe (Realizadas y Faltantes)
               </button>
             </div>
           </div>
 
-          {/* Quick Stats Banner */}
+          {/* Quick Stats Banner (Basado en Asignación de Evaluaciones) */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3.5 rounded-xl border bg-background/60 shadow-xs">
               <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-1">
                 <Users className="w-4 h-4 text-[#012169] dark:text-[#0084d5]" />
-                Total Líderes
+                Líderes Evaluadores
               </div>
               <div className="text-2xl font-bold text-foreground">{leadersSummary.totalLeaders}</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">Registrados con rol Líder</div>
-            </div>
-
-            <div className="p-3.5 rounded-xl border bg-[#012169]/5 border-[#012169]/20 shadow-xs">
-              <div className="flex items-center gap-2 text-[#012169] dark:text-[#0084d5] text-xs font-semibold mb-1">
-                <CheckCircle className="w-4 h-4 text-[#0084d5]" />
-                Con Evaluaciones
-              </div>
-              <div className="text-2xl font-bold text-[#012169] dark:text-[#0084d5]">
-                {leadersSummary.leadersWithEvaluations}
-              </div>
-              <div className="text-[11px] text-[#012169]/80 dark:text-[#0084d5]/80 mt-0.5">
-                {leadersSummary.completionPercentage}% de participación
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-xl border bg-slate-500/5 border-slate-300 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 text-xs font-semibold mb-1">
-                <AlertCircle className="w-4 h-4 text-[#64748b]" />
-                Sin Evaluaciones Realizadas
-              </div>
-              <div className="text-2xl font-bold text-danger-600 dark:text-danger-400">
-                {leadersSummary.leadersWithoutEvaluations}
-              </div>
               <div className="text-[11px] text-muted-foreground mt-0.5">
-                Requieren seguimiento prioritario
+                {leadersSummary.leadersWithEvaluations} con evaluaciones iniciadas
               </div>
             </div>
 
             <div className="p-3.5 rounded-xl border bg-background/60 shadow-xs">
               <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium mb-1">
                 <FileSpreadsheet className="w-4 h-4 text-[#012169] dark:text-[#0084d5]" />
-                Evaluaciones Totales
+                Evaluaciones Asignadas
               </div>
-              <div className="text-2xl font-bold text-foreground">{leadersSummary.totalEvaluations}</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">Gestionadas por líderes</div>
+              <div className="text-2xl font-bold text-foreground">{leadersSummary.totalAssigned}</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                Programadas en Asignación Evaluaciones
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl border bg-[#012169]/5 border-[#012169]/20 shadow-xs">
+              <div className="flex items-center gap-2 text-[#012169] dark:text-[#0084d5] text-xs font-semibold mb-1">
+                <CheckCircle className="w-4 h-4 text-[#0084d5]" />
+                Evaluaciones Realizadas
+              </div>
+              <div className="text-2xl font-bold text-[#012169] dark:text-[#0084d5]">
+                {leadersSummary.totalCompletedAssigned}
+                <span className="text-xs font-medium text-muted-foreground ml-1.5">
+                  / {leadersSummary.totalAssigned}
+                </span>
+              </div>
+              <div className="text-[11px] text-[#012169]/80 dark:text-[#0084d5]/80 mt-0.5">
+                {leadersSummary.overallAssignmentCompliance}% de avance sobre asignadas ({leadersSummary.totalEvaluations} totales)
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl border bg-danger-50/40 dark:bg-danger-950/20 border-danger-200 dark:border-danger-900/50 shadow-xs">
+              <div className="flex items-center gap-2 text-danger-700 dark:text-danger-300 text-xs font-semibold mb-1">
+                <AlertCircle className="w-4 h-4 text-danger-600" />
+                Evaluaciones Faltantes
+              </div>
+              <div className="text-2xl font-bold text-danger-600 dark:text-danger-400">
+                {leadersSummary.totalMissingAssigned}
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                En {leadersSummary.leadersWithMissingEvaluations} líderes con pendientes
+              </div>
             </div>
           </div>
 
           {/* Leaders Filters */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="relative">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase">Buscar por Líder, Correo o Cargo</label>
+              <label className="text-[10px] font-bold text-muted-foreground uppercase">Buscar Líder o Colaborador Asignado</label>
               <div className="relative mt-1">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <input
@@ -1656,7 +1744,7 @@ export default function ReportesPage() {
                     setSearchLeader(e.target.value);
                     setPageLeaders(1);
                   }}
-                  placeholder="Nombre de líder, correo o cargo..."
+                  placeholder="Líder, documento, cargo o colaborador..."
                   className="w-full h-[38px] pl-8 pr-2.5 rounded-xl border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
@@ -1677,7 +1765,7 @@ export default function ReportesPage() {
             </div>
 
             <div>
-              <label className="text-[10px] font-bold text-muted-foreground uppercase">Estado de Cumplimiento</label>
+              <label className="text-[10px] font-bold text-muted-foreground uppercase">Estado de Evaluaciones</label>
               <select
                 value={leaderStatusFilter}
                 onChange={(e) => {
@@ -1687,6 +1775,12 @@ export default function ReportesPage() {
                 className="w-full h-[38px] mt-1 px-2.5 rounded-xl border bg-background text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
               >
                 <option value="all">Todos los Líderes ({leadersData.length})</option>
+                <option value="missing_evals">
+                  Con Evaluaciones Faltantes ({leadersSummary.leadersWithMissingEvaluations})
+                </option>
+                <option value="completed_all">
+                  Cumplimiento 100% Asignadas ({leadersData.filter((l) => l.assignedCount > 0 && l.missingCount === 0).length})
+                </option>
                 <option value="with_evals">Con Evaluaciones Realizadas ({leadersSummary.leadersWithEvaluations})</option>
                 <option value="without_evals">Sin Evaluaciones Realizadas ({leadersSummary.leadersWithoutEvaluations})</option>
               </select>
@@ -1702,8 +1796,11 @@ export default function ReportesPage() {
                 }}
                 className="w-full h-[38px] mt-1 px-2.5 rounded-xl border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
               >
-                <option value="evals_desc">Mayor cantidad de evaluaciones</option>
-                <option value="evals_asc">Menor cantidad de evaluaciones</option>
+                <option value="missing_desc">Mayor cantidad de evaluaciones faltantes</option>
+                <option value="assigned_desc">Mayor cantidad de evaluaciones asignadas</option>
+                <option value="compliance_desc">Mayor % de cumplimiento</option>
+                <option value="evals_desc">Mayor cantidad de evaluaciones realizadas</option>
+                <option value="evals_asc">Menor cantidad de evaluaciones realizadas</option>
                 <option value="name_asc">Nombre Alfabético (A - Z)</option>
                 <option value="name_desc">Nombre Alfabético (Z - A)</option>
                 <option value="score_desc">Calificación promedio otorgada</option>
@@ -1720,93 +1817,282 @@ export default function ReportesPage() {
                     <tr className="bg-muted/40 border-b text-muted-foreground uppercase font-semibold">
                       <th className="p-3">Líder / Jefe Evaluador</th>
                       <th className="p-3">Cargo</th>
-                      <th className="p-3 text-center">Estado de Gestión</th>
-                      <th className="p-3 text-center">Evaluaciones Realizadas</th>
-                      <th className="p-3 text-center">Finalizadas</th>
-                      <th className="p-3 text-center">Pendientes Firma</th>
-                      <th className="p-3 text-center">Promedio Otorgado</th>
-                      <th className="p-3">Última Evaluación</th>
+                      <th className="p-3 text-center">Asignadas</th>
+                      <th className="p-3 text-center">Realizadas</th>
+                      <th className="p-3 text-center">Faltantes</th>
+                      <th className="p-3 text-center">Avance Asignación</th>
+                      <th className="p-3 text-center">Finalizadas / Pend. Firma</th>
+                      <th className="p-3 text-center">Promedio</th>
+                      <th className="p-3 text-center">Detalle</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y text-foreground">
                     {pagedLeaders.map((leader) => {
+                      const isExpanded = expandedLeaderId === leader.id;
+                      const assignedList = leader.assignedCollaborators || [];
+                      const filteredAssignedList = assignedList.filter((ac) => {
+                        if (detailFilterTab === "missing") return !ac.isCompleted;
+                        if (detailFilterTab === "completed") return ac.isCompleted;
+                        return true;
+                      });
+
                       return (
-                        <tr
-                          key={leader.id}
-                          className={cn(
-                            "hover:bg-muted/20 transition-colors",
-                            leader.totalEvaluations === 0 && "bg-danger-50/10"
-                          )}
-                        >
-                          <td className="p-3">
-                            <div className="font-semibold text-foreground flex items-center gap-1.5">
-                              {leader.name}
-                            </div>
-                            <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                              <Mail className="w-3 h-3 text-muted-foreground/70" />
-                              {leader.email}
-                            </div>
-                          </td>
-
-                          <td className="p-3">
-                            <span className="font-medium text-foreground text-xs">
-                              {leader.position || "—"}
-                            </span>
-                          </td>
-
-                          <td className="p-3 text-center">
-                            {leader.totalEvaluations > 0 ? (
-                              <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-success-50 text-success-700 border border-success-200 dark:bg-success-950/30 dark:border-success-800 dark:text-success-300">
-                                <CheckCircle className="w-3 h-3" />
-                                Activo ({leader.totalEvaluations} evd)
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold bg-danger-50 text-danger-700 border border-danger-200 dark:bg-danger-950/40 dark:border-danger-800 dark:text-danger-300 animate-pulse">
-                                <AlertTriangle className="w-3 h-3" />
-                                Sin Evaluaciones (0)
-                              </span>
+                        <React.Fragment key={leader.id}>
+                          <tr
+                            className={cn(
+                              "hover:bg-muted/20 transition-colors",
+                              leader.missingCount > 0 && "bg-amber-50/10 dark:bg-amber-950/5",
+                              leader.totalEvaluations === 0 && leader.assignedCount > 0 && "bg-danger-50/15"
                             )}
-                          </td>
+                          >
+                            <td className="p-3">
+                              <div className="font-semibold text-foreground flex items-center gap-1.5">
+                                {leader.name}
+                              </div>
+                              <div className="text-[11px] text-muted-foreground flex items-center gap-2 mt-0.5">
+                                {leader.documentNumber && leader.documentNumber !== "—" && (
+                                  <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-muted">
+                                    CC {leader.documentNumber}
+                                  </span>
+                                )}
+                                <span className="flex items-center gap-1">
+                                  <Mail className="w-3 h-3 text-muted-foreground/70" />
+                                  {leader.email}
+                                </span>
+                              </div>
+                            </td>
 
-                          <td className="p-3 text-center">
-                            <span className={cn(
-                              "text-sm font-bold",
-                              leader.totalEvaluations > 0 ? "text-foreground" : "text-danger-600 font-extrabold"
-                            )}>
-                              {leader.totalEvaluations}
-                            </span>
-                          </td>
+                            <td className="p-3">
+                              <span className="font-medium text-foreground text-xs">
+                                {leader.position || "—"}
+                              </span>
+                            </td>
 
-                          <td className="p-3 text-center text-muted-foreground">
-                            {leader.finalizedCount > 0 ? (
+                            <td className="p-3 text-center">
+                              <span className="inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-md bg-muted font-bold text-foreground text-xs">
+                                {leader.assignedCount}
+                              </span>
+                            </td>
+
+                            <td className="p-3 text-center">
+                              <span
+                                className={cn(
+                                  "inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-md font-bold text-xs",
+                                  leader.completedAssignedCount > 0 || leader.totalEvaluations > 0
+                                    ? "bg-success-50 text-success-700 border border-success-200 dark:bg-success-950/30 dark:text-success-300"
+                                    : "bg-muted text-muted-foreground"
+                                )}
+                              >
+                                {leader.assignedCount > 0 ? leader.completedAssignedCount : leader.totalEvaluations}
+                              </span>
+                            </td>
+
+                            <td className="p-3 text-center">
+                              {leader.missingCount > 0 ? (
+                                <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold bg-danger-50 text-danger-700 border border-danger-200 dark:bg-danger-950/40 dark:border-danger-800 dark:text-danger-300">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  {leader.missingCount} faltante{leader.missingCount === 1 ? "" : "s"}
+                                </span>
+                              ) : leader.assignedCount > 0 ? (
+                                <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-success-50 text-success-700 border border-success-200 dark:bg-success-950/30 dark:border-success-800 dark:text-success-300">
+                                  <CheckCircle className="w-3 h-3" />
+                                  0 (Al día)
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground text-[11px]">Sin asignaciones</span>
+                              )}
+                            </td>
+
+                            <td className="p-3 text-center min-w-[130px]">
+                              {leader.assignedCount > 0 ? (
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center justify-between text-[11px]">
+                                    <span className="font-bold text-foreground">{leader.compliancePercentage}%</span>
+                                    <span className="text-muted-foreground">
+                                      {leader.completedAssignedCount}/{leader.assignedCount}
+                                    </span>
+                                  </div>
+                                  <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
+                                    <div
+                                      className={cn(
+                                        "h-full rounded-full transition-all",
+                                        leader.compliancePercentage >= 100
+                                          ? "bg-success-600"
+                                          : leader.compliancePercentage >= 50
+                                          ? "bg-[#0084d5]"
+                                          : leader.compliancePercentage > 0
+                                          ? "bg-amber-500"
+                                          : "bg-danger-500"
+                                      )}
+                                      style={{ width: `${Math.min(100, leader.compliancePercentage)}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  {leader.totalEvaluations > 0 ? `${leader.totalEvaluations} eval.` : "—"}
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="p-3 text-center text-muted-foreground">
                               <span className="font-semibold text-success-600">{leader.finalizedCount}</span>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-
-                          <td className="p-3 text-center text-muted-foreground">
-                            {leader.pendingSignatureCount > 0 ? (
+                              {" / "}
                               <span className="font-semibold text-amber-600">{leader.pendingSignatureCount}</span>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
+                            </td>
 
-                          <td className="p-3 text-center font-semibold">
-                            {leader.averageScore > 0 ? (
-                              <span className="text-foreground">{leader.averageScore.toFixed(2)}</span>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">—</span>
-                            )}
-                          </td>
+                            <td className="p-3 text-center font-semibold">
+                              {leader.averageScore > 0 ? (
+                                <span className="text-foreground">{leader.averageScore.toFixed(2)}</span>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              )}
+                            </td>
 
-                          <td className="p-3 text-muted-foreground">
-                            {leader.lastEvaluationDate
-                              ? new Date(leader.lastEvaluationDate).toLocaleDateString("es-ES")
-                              : <span className="text-danger-500 font-medium text-[11px]">Sin registros</span>}
-                          </td>
-                        </tr>
+                            <td className="p-3 text-center">
+                              {assignedList.length > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (isExpanded) {
+                                      setExpandedLeaderId(null);
+                                    } else {
+                                      setExpandedLeaderId(leader.id);
+                                      setDetailFilterTab("all");
+                                    }
+                                  }}
+                                  className={cn(
+                                    "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors",
+                                    isExpanded
+                                      ? "bg-[#012169] text-white border-[#012169]"
+                                      : "bg-background hover:bg-muted text-foreground border-border"
+                                  )}
+                                >
+                                  {isExpanded ? (
+                                    <>
+                                      Ocultar <ChevronUp className="w-3.5 h-3.5" />
+                                    </>
+                                  ) : (
+                                    <>
+                                      Ver ({assignedList.length}) <ChevronDown className="w-3.5 h-3.5" />
+                                    </>
+                                  )}
+                                </button>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground">—</span>
+                              )}
+                            </td>
+                          </tr>
+
+                          {/* Fila Expandible con el Detalle de Evaluaciones Realizadas y Faltantes del Líder */}
+                          {isExpanded && assignedList.length > 0 && (
+                            <tr className="bg-muted/20">
+                              <td colSpan={9} className="p-4">
+                                <div className="rounded-xl border bg-card p-4 space-y-3 shadow-xs">
+                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b pb-3">
+                                    <div>
+                                      <h4 className="font-bold text-xs uppercase tracking-wide text-[#012169] dark:text-[#0084d5]">
+                                        Colaboradores Asignados a {leader.name}
+                                      </h4>
+                                      <p className="text-[11px] text-muted-foreground">
+                                        {leader.completedAssignedCount} realizadas y {leader.missingCount} faltantes de {leader.assignedCount} asignadas
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => setDetailFilterTab("all")}
+                                        className={cn(
+                                          "px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors",
+                                          detailFilterTab === "all"
+                                            ? "bg-[#012169] text-white"
+                                            : "bg-muted text-muted-foreground hover:text-foreground"
+                                        )}
+                                      >
+                                        Todas ({assignedList.length})
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setDetailFilterTab("missing")}
+                                        className={cn(
+                                          "px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors",
+                                          detailFilterTab === "missing"
+                                            ? "bg-danger-600 text-white"
+                                            : "bg-danger-50 text-danger-700 hover:bg-danger-100 dark:bg-danger-950/40 dark:text-danger-300"
+                                        )}
+                                      >
+                                        Faltantes ({leader.missingCount})
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setDetailFilterTab("completed")}
+                                        className={cn(
+                                          "px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors",
+                                          detailFilterTab === "completed"
+                                            ? "bg-success-600 text-white"
+                                            : "bg-success-50 text-success-700 hover:bg-success-100 dark:bg-success-950/40 dark:text-success-300"
+                                        )}
+                                      >
+                                        Realizadas ({leader.completedAssignedCount})
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {filteredAssignedList.length > 0 ? (
+                                    <div className="overflow-x-auto max-h-[300px] overflow-y-auto rounded-lg border">
+                                      <table className="w-full text-left text-[11px] border-collapse">
+                                        <thead className="bg-muted/50 sticky top-0">
+                                          <tr className="border-b text-muted-foreground uppercase font-semibold">
+                                            <th className="p-2.5">Colaborador Asignado</th>
+                                            <th className="p-2.5">Documento</th>
+                                            <th className="p-2.5">Cargo</th>
+                                            <th className="p-2.5">Área</th>
+                                            <th className="p-2.5 text-center">Estado Evaluación</th>
+                                            <th className="p-2.5 text-center">Puntaje</th>
+                                            <th className="p-2.5">Fecha</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y">
+                                          {filteredAssignedList.map((ac) => (
+                                            <tr key={ac.assignmentId} className="hover:bg-muted/20">
+                                              <td className="p-2.5 font-semibold text-foreground">{ac.collaboratorName}</td>
+                                              <td className="p-2.5 font-mono text-muted-foreground">{ac.documentNumber}</td>
+                                              <td className="p-2.5 text-muted-foreground">{ac.position}</td>
+                                              <td className="p-2.5 text-muted-foreground">{ac.area}</td>
+                                              <td className="p-2.5 text-center">
+                                                {ac.isCompleted ? (
+                                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-success-50 text-success-700 border border-success-200 dark:bg-success-950/30 dark:text-success-300">
+                                                    <CheckCircle className="w-3 h-3" />
+                                                    {ac.evaluationStatus === "pendiente_firma" ? "Realizada (Pend. Firma)" : "Realizada"}
+                                                  </span>
+                                                ) : (
+                                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-danger-50 text-danger-700 border border-danger-200 dark:bg-danger-950/40 dark:text-danger-300">
+                                                    <AlertTriangle className="w-3 h-3" />
+                                                    Faltante por Evaluar
+                                                  </span>
+                                                )}
+                                              </td>
+                                              <td className="p-2.5 text-center font-bold">
+                                                {ac.score != null ? ac.score.toFixed(2) : "—"}
+                                              </td>
+                                              <td className="p-2.5 text-muted-foreground">
+                                                {ac.evaluationDate ? new Date(ac.evaluationDate).toLocaleDateString("es-ES") : "Pendiente"}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  ) : (
+                                    <div className="p-4 text-center text-xs text-muted-foreground">
+                                      No hay colaboradores en esta pestaña.
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
