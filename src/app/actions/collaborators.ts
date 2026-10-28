@@ -117,74 +117,83 @@ export async function createCollaborator(collaboratorData: any) {
 }
 
 export async function getCollaborators() {
-  const supabase = await getSupabase();
-  const adminClient = getSupabaseAdmin();
-  const currentYear = new Date().getFullYear();
+  try {
+    const adminClient = getSupabaseAdmin();
+    const currentYear = new Date().getFullYear();
 
-  const [collabsRes, evalsRes] = await Promise.all([
-    supabase
-      .from("collaborators")
-      .select(`
-        *,
-        areas(name),
-        positions(name)
-      `)
-      .order("created_at", { ascending: false }),
-    adminClient
-      .from("evaluations")
-      .select("id, evaluatee_id, evaluation_year, status, created_at")
-  ]);
+    const [collabsRes, evalsRes] = await Promise.all([
+      adminClient
+        .from("collaborators")
+        .select(`
+          *,
+          areas(name),
+          positions(name)
+        `)
+        .order("created_at", { ascending: false }),
+      adminClient
+        .from("evaluations")
+        .select("id, evaluatee_id, evaluation_year, status, created_at")
+    ]);
 
-  if (collabsRes.error) {
-    console.error("Error fetching collaborators:", collabsRes.error);
-    return { data: [], error: collabsRes.error.message };
-  }
+    if (collabsRes.error) {
+      console.error("Error fetching collaborators:", collabsRes.error);
+      return { data: [], error: collabsRes.error.message };
+    }
 
-  // Set of collaborator IDs who completed or have an evaluation for current year
-  const completedCurrentYearCollabs = new Set<string>();
+    // Set of collaborator IDs who completed or have an evaluation for current year
+    const completedCurrentYearCollabs = new Set<string>();
 
-  if (evalsRes.data) {
-    evalsRes.data.forEach((ev: any) => {
-      const year = ev.evaluation_year || (ev.created_at ? new Date(ev.created_at).getFullYear() : currentYear);
-      const collabId = ev.evaluatee_id || (ev as any).collaborator_id;
-      if (collabId && Number(year) === currentYear) {
-        const st = (ev.status || "").toLowerCase();
-        if (st === "finalizada" || st === "pendiente_firma" || st === "completada" || st === "completado" || st === "aprobada" || st === "activo") {
-          completedCurrentYearCollabs.add(collabId);
+    if (evalsRes.data) {
+      evalsRes.data.forEach((ev: any) => {
+        const year = ev.evaluation_year || (ev.created_at ? new Date(ev.created_at).getFullYear() : currentYear);
+        const collabId = ev.evaluatee_id || (ev as any).collaborator_id;
+        if (collabId && Number(year) === currentYear) {
+          const st = (ev.status || "").toLowerCase();
+          if (st === "finalizada" || st === "pendiente_firma" || st === "completada" || st === "completado" || st === "aprobada" || st === "activo") {
+            completedCurrentYearCollabs.add(collabId);
+          }
         }
-      }
-    });
+      });
+    }
+
+    const enhancedData = (collabsRes.data || []).map((collab: any) => ({
+      ...collab,
+      has_evaluated_current_year: completedCurrentYearCollabs.has(collab.id)
+    }));
+
+    return { data: enhancedData, error: null };
+  } catch (err: any) {
+    console.error("Exception in getCollaborators:", err);
+    return { data: [], error: err?.message || "Error al cargar colaboradores" };
   }
-
-  const enhancedData = (collabsRes.data || []).map((collab: any) => ({
-    ...collab,
-    has_evaluated_current_year: completedCurrentYearCollabs.has(collab.id)
-  }));
-
-  return { data: enhancedData, error: null };
 }
 
 export async function getCollaboratorById(collaboratorId: string) {
-  const supabase = await getSupabase();
-  const { data, error } = await supabase
-    .from("collaborators")
-    .select(`
-      *,
-      areas(id, name),
-      positions(id, name),
-      immediate_boss:collaborators!immediate_boss_id(full_name),
-      area_leader:collaborators!area_leader_id(full_name),
-      manager:profiles!responsible_manager_id(first_name, last_name)
-    `)
-    .eq("id", collaboratorId)
-    .single();
+  try {
+    const adminClient = getSupabaseAdmin();
+    const { data, error } = await adminClient
+      .from("collaborators")
+      .select(`
+        *,
+        areas(id, name),
+        positions(id, name),
+        immediate_boss:collaborators!immediate_boss_id(full_name),
+        area_leader:collaborators!area_leader_id(full_name),
+        manager:profiles!responsible_manager_id(first_name, last_name)
+      `)
+      .eq("id", collaboratorId)
+      .single();
 
-  if (error) {
-    console.error("Error fetching collaborator:", error);
-    return { data: null, error: error.message };
+    if (error) {
+      console.error("Error fetching collaborator:", error);
+      return { data: null, error: error.message };
+    }
+
+    return { data, error: null };
+  } catch (err: any) {
+    console.error("Exception in getCollaboratorById:", err);
+    return { data: null, error: err?.message || "Error al consultar colaborador" };
   }
-
-  return { data, error: null };
 }
 
 export async function updateCollaborator(collaboratorId: string, updates: any) {

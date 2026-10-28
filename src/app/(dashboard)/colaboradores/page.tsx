@@ -51,26 +51,34 @@ export default function ColaboradoresPage() {
 
   React.useEffect(() => {
     async function fetchCollabs() {
-      const res = await getCollaborators();
-      if (!res.error && res.data) {
-        // Formatear los nested joins
-        const formatted = res.data.map((item: any) => ({
-          ...item,
-          area: item.areas ? { name: item.areas.name } : null,
-          position: item.positions ? { name: item.positions.name } : null
-        }));
-        setCollaborators(formatted);
-        // Extraer áreas únicas desde los datos reales
-        const areas = Array.from(
-          new Set(
-            formatted
-              .map((c: any) => c.area?.name)
-              .filter(Boolean)
-          )
-        ).sort() as string[];
-        setAvailableAreas(areas);
+      try {
+        const res = await getCollaborators();
+        if (res.error) {
+          toast.error("Error al cargar colaboradores: " + res.error);
+        } else if (res.data) {
+          // Formatear los nested joins
+          const formatted = res.data.map((item: any) => ({
+            ...item,
+            area: item.areas ? { name: item.areas.name } : null,
+            position: item.positions ? { name: item.positions.name } : null
+          }));
+          setCollaborators(formatted);
+          // Extraer áreas únicas desde los datos reales
+          const areas = Array.from(
+            new Set(
+              formatted
+                .map((c: any) => c.area?.name)
+                .filter(Boolean)
+            )
+          ).sort() as string[];
+          setAvailableAreas(areas);
+        }
+      } catch (err: any) {
+        console.error("Error en fetchCollabs:", err);
+        toast.error("Error al cargar colaboradores: " + (err?.message || "Error desconocido"));
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     }
     fetchCollabs();
   }, []);

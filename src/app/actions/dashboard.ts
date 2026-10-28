@@ -3,6 +3,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+import { createClient } from "@supabase/supabase-js";
+
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
 async function getSupabase() {
   const cookieStore = await cookies();
   return createServerClient(
@@ -42,7 +51,7 @@ function isEligibleByHireDate(hireDateStr: string | null | undefined): boolean {
 }
 
 export async function getDashboardStats() {
-  const supabase = await getSupabase();
+  const supabase = getSupabaseAdmin();
   
   // 1. Fetch active collaborators with hire_date, payroll_type, and areas
   const { data: collabsList } = await supabase

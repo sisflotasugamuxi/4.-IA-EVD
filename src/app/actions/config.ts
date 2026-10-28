@@ -3,7 +3,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { createClient } from "@supabase/supabase-js";
 import { verifyUserPermission } from "./admin";
+
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -33,14 +41,22 @@ async function getSupabase() {
 // ÁREAS
 // ==========================================
 export async function getAreas() {
-  const supabase = await getSupabase();
-  const { data, error } = await supabase
-    .from("areas")
-    .select("*")
-    .order("name");
-  
-  if (error) throw error;
-  return data;
+  try {
+    const adminClient = getSupabaseAdmin();
+    const { data, error } = await adminClient
+      .from("areas")
+      .select("*")
+      .order("name");
+    
+    if (error) {
+      console.error("Error fetching areas:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Exception in getAreas:", err);
+    return [];
+  }
 }
 
 export async function createArea(areaData: any) {
@@ -123,17 +139,25 @@ export async function deleteArea(areaId: string) {
 // CARGOS (POSITIONS)
 // ==========================================
 export async function getPositions() {
-  const supabase = await getSupabase();
-  const { data, error } = await supabase
-    .from("positions")
-    .select(`
-      *,
-      areas(name)
-    `)
-    .order("name");
-  
-  if (error) throw error;
-  return data;
+  try {
+    const adminClient = getSupabaseAdmin();
+    const { data, error } = await adminClient
+      .from("positions")
+      .select(`
+        *,
+        areas(name)
+      `)
+      .order("name");
+    
+    if (error) {
+      console.error("Error fetching positions:", error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error("Exception in getPositions:", err);
+    return [];
+  }
 }
 
 export async function createPosition(positionData: any) {

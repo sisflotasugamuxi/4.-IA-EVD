@@ -4,6 +4,15 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
+import { createClient } from "@supabase/supabase-js";
+
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
 async function getSupabase() {
   const cookieStore = await cookies();
   return createServerClient(
@@ -29,7 +38,7 @@ async function getSupabase() {
 }
 
 export async function getPMIs() {
-  const supabase = await getSupabase();
+  const supabase = getSupabaseAdmin();
   
   // A PMI is basically an evaluation_result where pmi_required = true
   // or where the result is 'no_aprobado'

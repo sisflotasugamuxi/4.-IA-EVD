@@ -37,46 +37,56 @@ async function getSupabase() {
 // ==========================================
 
 export async function getActiveVersion() {
-  const supabase = await getSupabase();
-  const { data, error } = await supabase
-    .from("evaluation_versions")
-    .select("*")
-    .eq("is_active", true)
-    .limit(1)
-    .single();
+  try {
+    const adminClient = await getSupabaseAdmin();
+    const { data, error } = await adminClient
+      .from("evaluation_versions")
+      .select("*")
+      .eq("is_active", true)
+      .limit(1)
+      .single();
 
-  if (error && error.code !== "PGRST116") {
-    console.error("Error fetching active version:", error);
+    if (error && error.code !== "PGRST116") {
+      console.error("Error fetching active version:", error);
+      return null;
+    }
+    return data;
+  } catch (err) {
+    console.error("Exception in getActiveVersion:", err);
     return null;
   }
-  return data;
 }
 
 export async function getEvaluationConfig() {
   noStore();
-  const supabase = await getSupabase();
-  const version = await getActiveVersion();
+  try {
+    const adminClient = await getSupabaseAdmin();
+    const version = await getActiveVersion();
 
-  if (!version) return { categories: [], questions: [], version: null };
+    if (!version) return { categories: [], questions: [], version: null };
 
-  const [categoriesRes, questionsRes] = await Promise.all([
-    supabase
-      .from("evaluation_categories")
-      .select("*")
-      .eq("version_id", version.id)
-      .order("sort_order"),
-    supabase
-      .from("evaluation_questions")
-      .select("*")
-      .eq("version_id", version.id)
-      .order("sort_order"),
-  ]);
+    const [categoriesRes, questionsRes] = await Promise.all([
+      adminClient
+        .from("evaluation_categories")
+        .select("*")
+        .eq("version_id", version.id)
+        .order("sort_order"),
+      adminClient
+        .from("evaluation_questions")
+        .select("*")
+        .eq("version_id", version.id)
+        .order("sort_order"),
+    ]);
 
-  return {
-    categories: categoriesRes.data || [],
-    questions: questionsRes.data || [],
-    version,
-  };
+    return {
+      categories: categoriesRes.data || [],
+      questions: questionsRes.data || [],
+      version,
+    };
+  } catch (err) {
+    console.error("Exception in getEvaluationConfig:", err);
+    return { categories: [], questions: [], version: null };
+  }
 }
 
 async function getSupabaseAdmin() {
@@ -269,27 +279,35 @@ export async function deleteQuestion(id: string) {
 // ==========================================
 
 export async function getEvaluations() {
-  const supabase = await getSupabase();
-  const { data, error } = await supabase
-    .from("evaluations")
-    .select(`
-      *,
-      collaborator:collaborators(
-        full_name, 
-        document_number, 
-        position_id,
-        hire_date,
-        position:positions(name),
-        areas:areas(name)
-      ),
-      evaluator:profiles!evaluations_evaluator_id_fkey(first_name, last_name),
-      version:evaluation_versions(name),
-      result:evaluation_results(*)
-    `)
-    .order("created_at", { ascending: false });
+  try {
+    const adminClient = await getSupabaseAdmin();
+    const { data, error } = await adminClient
+      .from("evaluations")
+      .select(`
+        *,
+        collaborator:collaborators(
+          full_name, 
+          document_number, 
+          position_id,
+          hire_date,
+          position:positions(name),
+          areas:areas(name)
+        ),
+        evaluator:profiles!evaluator_id(first_name, last_name),
+        version:evaluation_versions(name),
+        result:evaluation_results(*)
+      `)
+      .order("created_at", { ascending: false });
 
-  if (error) return { error: error.message, data: [] };
-  return { data };
+    if (error) {
+      console.error("Error fetching evaluations:", error);
+      return { error: error.message, data: [] };
+    }
+    return { data: data || [] };
+  } catch (err: any) {
+    console.error("Exception in getEvaluations:", err);
+    return { error: err?.message || "Error al cargar evaluaciones", data: [] };
+  }
 }
 
 export async function getEvaluationById(evaluationId: string) {
@@ -565,59 +583,72 @@ export async function completeCollaboratorSignature(evaluationId: string, signat
 }
 
 export async function getPendingSignatureEvaluations() {
-  const supabase = await getSupabase();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) return { error: "No autenticado", data: [] };
+  try {
+    const adminClient = await getSupabaseAdmin();
+    let roleName = "admin";
+    let currentUserId: string | null = null;
 
-  const adminClient = await getSupabaseAdmin();
+    try {
+      const supabase = await getSupabase();
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData?.user?.id) {
+        currentUserId = userData.user.id;
+        const { data: profile } = await adminClient
+          .from("profiles")
+          .select("id, roles(name)")
+          .eq("id", currentUserId)
+          .single();
+        roleName = (profile?.roles as any)?.name || "admin";
+      }
+    } catch (authErr) {
+      console.warn("Non-fatal: session check in getPendingSignatureEvaluations:", authErr);
+    }
 
-  // Obtener perfil y rol del usuario
-  const { data: profile } = await adminClient
-    .from("profiles")
-    .select("id, roles(name)")
-    .eq("id", userData.user.id)
-    .single();
-
-  const roleName = (profile?.roles as any)?.name;
-
-  let query = adminClient
-    .from("evaluations")
-    .select(`
-      id,
-      code,
-      evaluation_year,
-      evaluation_date,
-      created_at,
-      status,
-      evaluator_id,
-      evaluatee_id,
-      strengths,
-      improvement_opportunities,
-      training_needs,
-      observations,
-      collaborator:collaborators(
+    let query = adminClient
+      .from("evaluations")
+      .select(`
         id,
-        full_name,
-        document_type,
-        document_number,
-        email,
-        position:positions(name),
-        areas:areas(name)
-      ),
-      evaluator:profiles!evaluations_evaluator_id_fkey(id, first_name, last_name, email, avatar_url),
-      result:evaluation_results(*)
-    `)
-    .eq("status", "pendiente_firma");
+        code,
+        evaluation_year,
+        evaluation_date,
+        created_at,
+        status,
+        evaluator_id,
+        evaluatee_id,
+        strengths,
+        improvement_opportunities,
+        training_needs,
+        observations,
+        collaborator:collaborators(
+          id,
+          full_name,
+          document_type,
+          document_number,
+          email,
+          position:positions(name),
+          areas:areas(name)
+        ),
+        evaluator:profiles!evaluator_id(id, first_name, last_name, email, avatar_url),
+        result:evaluation_results(*)
+      `)
+      .eq("status", "pendiente_firma");
 
-  // Si es rol líder, filtrar para que solo vea las evaluaciones donde él fue el evaluador
-  if (roleName === "lider") {
-    query = query.eq("evaluator_id", userData.user.id);
+    // Si es rol líder, filtrar para que solo vea las evaluaciones donde él fue el evaluador
+    if (roleName === "lider" && currentUserId) {
+      query = query.eq("evaluator_id", currentUserId);
+    }
+
+    const { data, error } = await query.order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error in getPendingSignatureEvaluations:", error);
+      return { error: error.message, data: [] };
+    }
+    return { data: data || [] };
+  } catch (err: any) {
+    console.error("Exception in getPendingSignatureEvaluations:", err);
+    return { error: err?.message || "Error al cargar evaluaciones pendientes", data: [] };
   }
-
-  const { data, error } = await query.order("created_at", { ascending: false });
-
-  if (error) return { error: error.message, data: [] };
-  return { data };
 }
 
 export async function sendEvaluationEmail({

@@ -6,6 +6,15 @@ import { revalidatePath } from "next/cache";
 import { logAudit } from "./audit";
 import { verifyUserPermission } from "./admin";
 
+import { createClient } from "@supabase/supabase-js";
+
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
 async function getSupabase() {
   const cookieStore = await cookies();
   return createServerClient(
@@ -34,7 +43,7 @@ import { DEFAULT_FIELDS } from "@/lib/constants";
 
 export async function getCollaboratorFieldsConfig() {
   try {
-    const supabase = await getSupabase();
+    const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from("collaborator_fields_config")
       .select("*")
