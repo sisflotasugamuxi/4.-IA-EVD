@@ -577,30 +577,46 @@ export default function AsignacionesPage() {
   };
 
   const sqlCodeToCopy = `-- Migración SQL para crear la tabla de asignaciones de evaluación
-CREATE TABLE IF NOT EXISTS evaluation_assignments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+SET search_path TO public, extensions;
+
+CREATE TABLE IF NOT EXISTS public.evaluation_assignments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL DEFAULT '11111111-0000-0000-0000-000000000001',
   evaluation_year INTEGER NOT NULL DEFAULT EXTRACT(YEAR FROM CURRENT_DATE),
-  version_id UUID REFERENCES evaluation_versions(id) ON DELETE SET NULL,
-  evaluator_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  collaborator_id UUID NOT NULL REFERENCES collaborators(id) ON DELETE CASCADE,
-  evaluation_id UUID REFERENCES evaluations(id) ON DELETE SET NULL,
+  version_id UUID REFERENCES public.evaluation_versions(id) ON DELETE SET NULL,
+  evaluator_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  collaborator_id UUID NOT NULL REFERENCES public.collaborators(id) ON DELETE CASCADE,
+  evaluation_id UUID REFERENCES public.evaluations(id) ON DELETE SET NULL,
   status VARCHAR(50) NOT NULL DEFAULT 'pendiente',
   notes TEXT,
-  assigned_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  assigned_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT unique_year_collaborator UNIQUE(evaluation_year, collaborator_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_eval_assignments_year ON evaluation_assignments(evaluation_year);
-CREATE INDEX IF NOT EXISTS idx_eval_assignments_evaluator ON evaluation_assignments(evaluator_id);
-CREATE INDEX IF NOT EXISTS idx_eval_assignments_collab ON evaluation_assignments(collaborator_id);
-CREATE INDEX IF NOT EXISTS idx_eval_assignments_status ON evaluation_assignments(status);
+CREATE INDEX IF NOT EXISTS idx_eval_assignments_year ON public.evaluation_assignments(evaluation_year);
+CREATE INDEX IF NOT EXISTS idx_eval_assignments_evaluator ON public.evaluation_assignments(evaluator_id);
+CREATE INDEX IF NOT EXISTS idx_eval_assignments_collab ON public.evaluation_assignments(collaborator_id);
+CREATE INDEX IF NOT EXISTS idx_eval_assignments_status ON public.evaluation_assignments(status);
+CREATE INDEX IF NOT EXISTS idx_eval_assignments_comp ON public.evaluation_assignments(company_id);
 
-ALTER TABLE evaluation_assignments ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Admin, RRHH y Gerencia pueden gestionar asignaciones" ON evaluation_assignments FOR ALL USING (true);
-CREATE POLICY "Líderes pueden ver sus evaluaciones asignadas" ON evaluation_assignments FOR SELECT USING (evaluator_id = auth.uid());`;
+ALTER TABLE public.evaluation_assignments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Permitir acceso completo a service_role" ON public.evaluation_assignments;
+CREATE POLICY "Permitir acceso completo a service_role" ON public.evaluation_assignments FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admin, RRHH y Gerencia pueden gestionar asignaciones" ON public.evaluation_assignments;
+CREATE POLICY "Admin, RRHH y Gerencia pueden gestionar asignaciones" ON public.evaluation_assignments FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.profiles p
+    JOIN public.roles r ON p.role_id = r.id
+    WHERE p.id = auth.uid() AND r.name::text IN ('admin', 'rrhh', 'gerencia')
+  )
+);
+
+DROP POLICY IF EXISTS "Líderes pueden ver sus evaluaciones asignadas" ON public.evaluation_assignments;
+CREATE POLICY "Líderes pueden ver sus evaluaciones asignadas" ON public.evaluation_assignments FOR SELECT USING (evaluator_id = auth.uid());`;
 
   const copySqlToClipboard = () => {
     navigator.clipboard.writeText(sqlCodeToCopy);
