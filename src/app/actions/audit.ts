@@ -2,7 +2,7 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/server";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -19,16 +19,7 @@ async function getSupabase() {
 }
 
 async function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    }
-  );
+  return createAdminClient();
 }
 
 export async function getAuditLogs(limit = 200, filters?: {

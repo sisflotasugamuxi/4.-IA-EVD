@@ -2,7 +2,7 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath, unstable_noStore as noStore } from "next/cache";
 import { Resend } from "resend";
 import { logAudit } from "./audit";
@@ -90,16 +90,7 @@ export async function getEvaluationConfig() {
 }
 
 async function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    }
-  );
+  return createAdminClient();
 }
 
 export async function updateQuestionStatus(questionId: string, isActive: boolean) {

@@ -3,7 +3,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/server";
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -26,10 +26,7 @@ async function getSupabase() {
 }
 
 function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  return createAdminClient();
 }
 
 // ==========================================
@@ -319,7 +316,7 @@ export interface UserRoleAndPermissions {
   permissions: Record<string, UserPermissionItem>;
 }
 
-export const ALL_SYSTEM_MODULES = [
+const ALL_SYSTEM_MODULES = [
   "colaboradores",
   "evaluaciones",
   "configuracion",

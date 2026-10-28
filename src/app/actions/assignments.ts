@@ -1,7 +1,7 @@
 "use server";
 
 import { createServerClient } from "@supabase/ssr";
-import { createClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { revalidatePath, unstable_noStore as noStore } from "next/cache";
 import { logAudit } from "./audit";
@@ -30,16 +30,7 @@ async function getSupabase() {
 }
 
 async function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    }
-  );
+  return createAdminClient();
 }
 
 /**

@@ -1,8 +1,13 @@
 "use server";
 
 import { createServerClient } from "@supabase/ssr";
+import { createAdminClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+
+function getSupabaseAdmin() {
+  return createAdminClient();
+}
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -19,36 +24,42 @@ async function getSupabase() {
 }
 
 export async function getFeedbackSessions() {
-  const supabase = await getSupabase();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) return { data: [], error: "No autenticado" };
+  try {
+    const supabase = await getSupabase();
+    const adminClient = getSupabaseAdmin();
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return { data: [], error: "No autenticado" };
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", userData.user.id)
-    .single();
+    const { data: profile } = await adminClient
+      .from("profiles")
+      .select("company_id")
+      .eq("id", userData.user.id)
+      .single();
 
-  if (!profile?.company_id) return { data: [], error: "Empresa no encontrada" };
+    if (!profile?.company_id) return { data: [], error: "Empresa no encontrada" };
 
-  const { data, error } = await supabase
-    .from("feedback_sessions")
-    .select(`
-      *,
-      evaluation:evaluations(
-        id, 
-        created_at,
-        collaborator:collaborators(full_name, positions(name))
-      )
-    `)
-    .order("created_at", { ascending: false });
+    const { data, error } = await adminClient
+      .from("feedback_sessions")
+      .select(`
+        *,
+        evaluation:evaluations(
+          id, 
+          created_at,
+          collaborator:collaborators(full_name, positions(name))
+        )
+      `)
+      .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error("Error fetching feedback:", error);
-    return { data: [], error: error.message };
+    if (error) {
+      console.error("Error fetching feedback:", error);
+      return { data: [], error: error.message };
+    }
+
+    return { data: data || [], error: null };
+  } catch (err: any) {
+    console.error("Error in getFeedbackSessions:", err);
+    return { data: [], error: err?.message || "Error al cargar retroalimentación" };
   }
-
-  return { data, error: null };
 }
 
 export async function createFeedbackSession(evaluationId: string, notes: string, commitments: string) {
