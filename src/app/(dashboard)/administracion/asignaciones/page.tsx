@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   UserCheck, Users, Upload, Download, Plus, Search, Filter,
-  CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronUp,
+  CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
   FileSpreadsheet, Trash2, ArrowRight, RefreshCw, Copy, Check,
   ExternalLink, UserX, Building2, Briefcase, Award, Shield,
   MoreVertical, Edit3, X, HelpCircle, FileText
@@ -45,12 +45,15 @@ export default function AsignacionesPage() {
     overallCompletion: 0,
   });
 
-  // Filtros
+  // Filtros y Paginación
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("todos");
   const [leaderFilter, setLeaderFilter] = useState<string>("todos");
   const [viewMode, setViewMode] = useState<"lideres" | "general">("lideres");
   const [expandedLeaders, setExpandedLeaders] = useState<Record<string, boolean>>({});
+  const [leaderPages, setLeaderPages] = useState<Record<string, number>>({});
+  const [generalPage, setGeneralPage] = useState(1);
+  const LEADER_PAGE_SIZE = 10;
 
   // Modales
   const [showManualModal, setShowManualModal] = useState(false);
@@ -158,6 +161,11 @@ export default function AsignacionesPage() {
   useEffect(() => {
     loadData();
   }, [selectedYear]);
+
+  useEffect(() => {
+    setLeaderPages({});
+    setGeneralPage(1);
+  }, [searchTerm, statusFilter, leaderFilter, selectedYear]);
 
   // Cargar líderes y colaboradores cuando se abre un modal con animación de 0% a 100%
   const loadAuxData = async () => {
@@ -1363,131 +1371,247 @@ NOTIFY pgrst, 'reload schema';`;
                       </div>
                     </div>
 
-                    {/* Tabla de Colaboradores del Líder */}
+                    {/* Tabla de Colaboradores del Líder con Paginación (> 10 colaboradores) */}
                     <AnimatePresence>
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="border-t bg-muted/10 overflow-hidden"
-                        >
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-xs text-left table-fixed min-w-[780px]">
-                              <thead className="bg-muted/40 text-muted-foreground font-semibold border-b">
-                                <tr>
-                                  <th className="py-2.5 px-4 w-[130px]">Documento</th>
-                                  <th className="py-2.5 px-4 w-[240px]">Colaborador Evaluado</th>
-                                  <th className="py-2.5 px-4 w-[190px]">Cargo</th>
-                                  <th className="py-2.5 px-4 w-[160px]">Área</th>
-                                  <th className="py-2.5 px-4 w-[140px] text-center">Estado Evaluación</th>
-                                  <th className="py-2.5 px-4 w-[100px] text-center">Calificación</th>
-                                  <th className="py-2.5 px-4 w-[110px] text-right">Acciones</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-border/60">
-                                {leader.assignments.map((assignment) => {
-                                  const collab = assignment.collaborator;
-                                  const evalRes = assignment.evaluation?.result;
-                                  const st = assignment.status;
+                      {isExpanded && (() => {
+                        const q = searchTerm.toLowerCase().trim();
+                        const leaderSelfMatches =
+                          !q ||
+                          leader.leaderName.toLowerCase().includes(q) ||
+                          leader.leaderEmail.toLowerCase().includes(q) ||
+                          leader.leaderPosition.toLowerCase().includes(q);
 
-                                  return (
-                                    <tr key={assignment.id} className="hover:bg-muted/20 transition-colors">
-                                      <td className="py-2.5 px-4 font-mono font-medium text-foreground truncate">
-                                        {collab?.document_number || "—"}
-                                      </td>
-                                      <td className="py-2.5 px-4 font-semibold text-foreground truncate" title={collab?.full_name || ""}>
-                                        {collab?.full_name || `${collab?.first_name || ""} ${collab?.last_name || ""}`.trim()}
-                                      </td>
-                                      <td className="py-2.5 px-4 text-muted-foreground truncate">
-                                        {Array.isArray(collab?.positions) ? collab?.positions[0]?.name : collab?.positions?.name || "Sin Cargo"}
-                                      </td>
-                                      <td className="py-2.5 px-4 text-muted-foreground truncate">
-                                        {Array.isArray(collab?.areas) ? collab?.areas[0]?.name : collab?.areas?.name || "Sin Área"}
-                                      </td>
-                                      <td className="py-2.5 px-4 text-center">
-                                        {st === "finalizada" ? (
-                                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#012169]/10 text-[#012169] dark:bg-[#012169]/30 dark:text-[#38bdf8] border border-[#012169]/20 min-w-[105px]">
-                                            <CheckCircle2 className="w-3 h-3" />
-                                            Finalizada
-                                          </span>
-                                        ) : st === "pendiente_firma" ? (
-                                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#0084d5]/10 text-[#0084d5] border border-[#0084d5]/20 min-w-[105px]">
-                                            <Clock className="w-3 h-3" />
-                                            Pendiente Firma
-                                          </span>
-                                        ) : st === "en_proceso" ? (
-                                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#0084d5]/5 text-[#0084d5] border border-[#0084d5]/20 min-w-[105px]">
-                                            <Clock className="w-3 h-3" />
-                                            En Proceso
-                                          </span>
-                                        ) : (
-                                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 min-w-[105px]">
-                                            Sin Iniciar
-                                          </span>
-                                        )}
-                                      </td>
-                                      <td className="py-2.5 px-4 text-center font-bold tabular-nums">
-                                        {evalRes?.overall_average != null ? (
-                                          <span className="text-[#012169] dark:text-[#38bdf8]">
-                                            {formatScore(evalRes.overall_average)}
-                                          </span>
-                                        ) : (
-                                          <span className="text-slate-400 font-normal">—</span>
-                                        )}
-                                      </td>
-                                      <td className="py-2.5 px-4 text-right">
-                                        <div className="flex items-center justify-end gap-1.5">
-                                          {assignment.evaluation_id ? (
-                                            <Link
-                                              href={`/evaluaciones/${assignment.evaluation_id}`}
-                                              className="p-1.5 rounded-md text-slate-500 hover:text-[#012169] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                                              title="Ver Evaluación"
-                                            >
-                                              <ExternalLink className="w-3.5 h-3.5" />
-                                            </Link>
+                        const visibleAssignments = leader.assignments.filter((a) => {
+                          const matchesStatus = statusFilter === "todos" || a.status === statusFilter;
+                          const matchesCollabSearch =
+                            leaderSelfMatches ||
+                            (a.collaborator?.full_name || "").toLowerCase().includes(q) ||
+                            (a.collaborator?.document_number || "").includes(q) ||
+                            (a.collaborator?.positions?.name || "").toLowerCase().includes(q);
+                          return matchesStatus && matchesCollabSearch;
+                        });
+
+                        const totalLeaderItems = visibleAssignments.length;
+                        const totalLeaderPages = Math.max(1, Math.ceil(totalLeaderItems / LEADER_PAGE_SIZE));
+                        const currentLeaderPage = Math.min(leaderPages[leader.leaderId] || 1, totalLeaderPages);
+                        const startIdx = (currentLeaderPage - 1) * LEADER_PAGE_SIZE;
+                        const paginatedLeaderAssignments = visibleAssignments.slice(
+                          startIdx,
+                          startIdx + LEADER_PAGE_SIZE
+                        );
+
+                        return (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="border-t bg-muted/10 overflow-hidden"
+                          >
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs text-left table-fixed min-w-[780px]">
+                                <thead className="bg-muted/40 text-muted-foreground font-semibold border-b">
+                                  <tr>
+                                    <th className="py-2.5 px-4 w-[130px]">Documento</th>
+                                    <th className="py-2.5 px-4 w-[240px]">Colaborador Evaluado</th>
+                                    <th className="py-2.5 px-4 w-[190px]">Cargo</th>
+                                    <th className="py-2.5 px-4 w-[160px]">Área</th>
+                                    <th className="py-2.5 px-4 w-[140px] text-center">Estado Evaluación</th>
+                                    <th className="py-2.5 px-4 w-[100px] text-center">Calificación</th>
+                                    <th className="py-2.5 px-4 w-[110px] text-right">Acciones</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border/60">
+                                  {paginatedLeaderAssignments.map((assignment) => {
+                                    const collab = assignment.collaborator;
+                                    const evalRes = assignment.evaluation?.result;
+                                    const st = assignment.status;
+
+                                    return (
+                                      <tr key={assignment.id} className="hover:bg-muted/20 transition-colors">
+                                        <td className="py-2.5 px-4 font-mono font-medium text-foreground truncate">
+                                          {collab?.document_number || "—"}
+                                        </td>
+                                        <td className="py-2.5 px-4 font-semibold text-foreground truncate" title={collab?.full_name || ""}>
+                                          {collab?.full_name || `${collab?.first_name || ""} ${collab?.last_name || ""}`.trim()}
+                                        </td>
+                                        <td className="py-2.5 px-4 text-muted-foreground truncate">
+                                          {Array.isArray(collab?.positions) ? collab?.positions[0]?.name : collab?.positions?.name || "Sin Cargo"}
+                                        </td>
+                                        <td className="py-2.5 px-4 text-muted-foreground truncate">
+                                          {Array.isArray(collab?.areas) ? collab?.areas[0]?.name : collab?.areas?.name || "Sin Área"}
+                                        </td>
+                                        <td className="py-2.5 px-4 text-center">
+                                          {st === "finalizada" ? (
+                                            <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#012169]/10 text-[#012169] dark:bg-[#012169]/30 dark:text-[#38bdf8] border border-[#012169]/20 min-w-[105px]">
+                                              <CheckCircle2 className="w-3 h-3" />
+                                              Finalizada
+                                            </span>
+                                          ) : st === "pendiente_firma" ? (
+                                            <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#0084d5]/10 text-[#0084d5] border border-[#0084d5]/20 min-w-[105px]">
+                                              <Clock className="w-3 h-3" />
+                                              Pendiente Firma
+                                            </span>
+                                          ) : st === "en_proceso" ? (
+                                            <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#0084d5]/5 text-[#0084d5] border border-[#0084d5]/20 min-w-[105px]">
+                                              <Clock className="w-3 h-3" />
+                                              En Proceso
+                                            </span>
                                           ) : (
-                                            <Link
-                                              href={`/evaluaciones/nueva?collab=${collab?.id}`}
-                                              className="p-1.5 rounded-md text-slate-500 hover:text-[#0084d5] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                                              title="Iniciar Evaluación"
-                                            >
-                                              <Plus className="w-3.5 h-3.5" />
-                                            </Link>
+                                            <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 min-w-[105px]">
+                                              Sin Iniciar
+                                            </span>
                                           )}
+                                        </td>
+                                        <td className="py-2.5 px-4 text-center font-bold tabular-nums">
+                                          {evalRes?.overall_average != null ? (
+                                            <span className="text-[#012169] dark:text-[#38bdf8]">
+                                              {formatScore(evalRes.overall_average)}
+                                            </span>
+                                          ) : (
+                                            <span className="text-slate-400 font-normal">—</span>
+                                          )}
+                                        </td>
+                                        <td className="py-2.5 px-4 text-right">
+                                          <div className="flex items-center justify-end gap-1.5">
+                                            {assignment.evaluation_id ? (
+                                              <Link
+                                                href={`/evaluaciones/${assignment.evaluation_id}`}
+                                                className="p-1.5 rounded-md text-slate-500 hover:text-[#012169] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                                title="Ver Evaluación"
+                                              >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                              </Link>
+                                            ) : (
+                                              <Link
+                                                href={`/evaluaciones/nueva?collab=${collab?.id}`}
+                                                className="p-1.5 rounded-md text-slate-500 hover:text-[#0084d5] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                                title="Iniciar Evaluación"
+                                              >
+                                                <Plus className="w-3.5 h-3.5" />
+                                              </Link>
+                                            )}
 
-                                          <button
-                                            onClick={() => {
-                                              setSelectedAssignmentForReassign(assignment);
-                                              setReassignSearch("");
-                                              setReassignNewLeaderId("");
-                                              loadAuxData();
-                                              setShowReassignModal(true);
-                                            }}
-                                            className="p-1.5 rounded-md text-slate-500 hover:text-[#0084d5] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                                            title="Reasignar a otro líder"
-                                          >
-                                            <Edit3 className="w-3.5 h-3.5" />
-                                          </button>
+                                            <button
+                                              onClick={() => {
+                                                setSelectedAssignmentForReassign(assignment);
+                                                setReassignSearch("");
+                                                setReassignNewLeaderId("");
+                                                loadAuxData();
+                                                setShowReassignModal(true);
+                                              }}
+                                              className="p-1.5 rounded-md text-slate-500 hover:text-[#0084d5] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                              title="Reasignar a otro líder"
+                                            >
+                                              <Edit3 className="w-3.5 h-3.5" />
+                                            </button>
 
-                                          <button
-                                            onClick={() => handleDeleteAssignment(assignment.id, collab?.full_name || "este colaborador")}
-                                            className="p-1.5 rounded-md text-slate-500 hover:text-[#012169] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                                            title="Eliminar asignación"
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </button>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </motion.div>
-                      )}
+                                            <button
+                                              onClick={() => handleDeleteAssignment(assignment.id, collab?.full_name || "este colaborador")}
+                                              className="p-1.5 rounded-md text-slate-500 hover:text-[#012169] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                              title="Eliminar asignación"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Barra de Paginación cuando el líder tiene más de 10 colaboradores */}
+                            {totalLeaderItems > LEADER_PAGE_SIZE && (
+                              <div className="px-4 py-2.5 border-t bg-slate-50/70 dark:bg-slate-900/30 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+                                <span className="text-slate-500 dark:text-slate-400 tabular-nums">
+                                  Mostrando{" "}
+                                  <strong className="text-[#012169] dark:text-white">{startIdx + 1}</strong>–
+                                  <strong className="text-[#012169] dark:text-white">
+                                    {Math.min(startIdx + LEADER_PAGE_SIZE, totalLeaderItems)}
+                                  </strong>{" "}
+                                  de <strong className="text-[#012169] dark:text-white">{totalLeaderItems}</strong>{" "}
+                                  colaboradores
+                                </span>
+
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={currentLeaderPage <= 1}
+                                    onClick={() =>
+                                      setLeaderPages((prev) => ({
+                                        ...prev,
+                                        [leader.leaderId]: Math.max(1, currentLeaderPage - 1),
+                                      }))
+                                    }
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-card text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed font-semibold transition-colors cursor-pointer"
+                                  >
+                                    <ChevronLeft className="w-3.5 h-3.5" />
+                                    <span>Anterior</span>
+                                  </button>
+
+                                  {Array.from({ length: totalLeaderPages }, (_, idx) => idx + 1)
+                                    .filter(
+                                      (p) =>
+                                        p === 1 ||
+                                        p === totalLeaderPages ||
+                                        Math.abs(p - currentLeaderPage) <= 1
+                                    )
+                                    .reduce<(number | string)[]>((acc, p, i, arr) => {
+                                      if (i > 0 && p - (arr[i - 1] as number) > 1) {
+                                        acc.push("...");
+                                      }
+                                      acc.push(p);
+                                      return acc;
+                                    }, [])
+                                    .map((item, idx) =>
+                                      item === "..." ? (
+                                        <span key={`dots-${idx}`} className="px-1.5 text-slate-400">
+                                          ...
+                                        </span>
+                                      ) : (
+                                        <button
+                                          key={item}
+                                          type="button"
+                                          onClick={() =>
+                                            setLeaderPages((prev) => ({
+                                              ...prev,
+                                              [leader.leaderId]: Number(item),
+                                            }))
+                                          }
+                                          className={cn(
+                                            "w-7 h-7 rounded-lg text-xs font-bold tabular-nums transition-colors cursor-pointer",
+                                            currentLeaderPage === item
+                                              ? "bg-[#012169] text-white shadow-2xs"
+                                              : "border border-slate-200 dark:border-slate-700 bg-card text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                          )}
+                                        >
+                                          {item}
+                                        </button>
+                                      )
+                                    )}
+
+                                  <button
+                                    type="button"
+                                    disabled={currentLeaderPage >= totalLeaderPages}
+                                    onClick={() =>
+                                      setLeaderPages((prev) => ({
+                                        ...prev,
+                                        [leader.leaderId]: Math.min(totalLeaderPages, currentLeaderPage + 1),
+                                      }))
+                                    }
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-card text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed font-semibold transition-colors cursor-pointer"
+                                  >
+                                    <span>Siguiente</span>
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </motion.div>
+                        );
+                      })()}
                     </AnimatePresence>
                   </div>
                 );
