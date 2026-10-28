@@ -139,12 +139,8 @@ export default function AsignacionesPage() {
         overallCompletion: 0,
       });
 
-      // Expandir por defecto los primeros líderes
-      const initialExpanded: Record<string, boolean> = {};
-      (res.summaries || []).slice(0, 3).forEach((l) => {
-        if (l.leaderId) initialExpanded[l.leaderId] = true;
-      });
-      setExpandedLeaders(initialExpanded);
+      // Mantener las tarjetas contraídas inicialmente para una vista ejecutiva limpia y alineada
+      setExpandedLeaders({});
     } catch (err: any) {
       clearInterval(progressTimer);
       console.error("Error en loadData asignaciones:", err);
@@ -889,111 +885,111 @@ NOTIFY pgrst, 'reload schema';`;
       )}
 
       {/* Tarjetas KPI de Resumen */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-        <div className="rounded-2xl border bg-card p-4 shadow-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Planificadas</span>
-            <div className="p-2 rounded-xl bg-[#012169]/10 text-[#012169]">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-stretch">
+        <div className="rounded-2xl border border-l-4 border-l-[#012169] bg-card p-4 shadow-xs flex flex-col justify-between gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Total Planificadas</span>
+            <div className="p-2 rounded-xl bg-[#012169]/10 text-[#012169] flex-shrink-0">
               <Users className="w-4 h-4" />
             </div>
           </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold text-foreground">{stats.totalAssignments}</span>
-            <span className="text-xs font-bold text-[#0084d5]">{stats.overallCompletion}% avance</span>
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-2xl font-extrabold text-foreground tabular-nums">{stats.totalAssignments}</span>
+            <span className="text-xs font-bold text-[#0084d5] tabular-nums">{stats.overallCompletion}% avance</span>
           </div>
           <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
             <div className="bg-[#012169] h-full rounded-full transition-all" style={{ width: `${stats.overallCompletion}%` }} />
           </div>
         </div>
 
-        <div className="rounded-2xl border bg-card p-4 shadow-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Finalizadas</span>
-            <div className="p-2 rounded-xl bg-success-500/10 text-success-600">
+        <div className="rounded-2xl border border-l-4 border-l-emerald-500 bg-card p-4 shadow-xs flex flex-col justify-between gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Finalizadas</span>
+            <div className="p-2 rounded-xl bg-success-500/10 text-success-600 flex-shrink-0">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold text-success-600">{stats.totalCompleted}</span>
-            <span className="text-xs text-muted-foreground">Completadas</span>
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-2xl font-extrabold text-success-600 tabular-nums">{stats.totalCompleted}</span>
+            <span className="text-xs font-medium text-muted-foreground">Completadas</span>
           </div>
-          <p className="text-[11px] text-muted-foreground">Con resultado y calificación</p>
+          <p className="text-[11px] text-muted-foreground truncate">Con resultado y calificación</p>
         </div>
 
-        <div className="rounded-2xl border bg-card p-4 shadow-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pendientes de Firma</span>
-            <div className="p-2 rounded-xl bg-[#0084d5]/10 text-[#0084d5]">
+        <div className="rounded-2xl border border-l-4 border-l-[#0084d5] bg-card p-4 shadow-xs flex flex-col justify-between gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Pendientes de Firma</span>
+            <div className="p-2 rounded-xl bg-[#0084d5]/10 text-[#0084d5] flex-shrink-0">
               <FileText className="w-4 h-4" />
             </div>
           </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold text-[#0084d5]">{stats.totalPendingSignature}</span>
-            <span className="text-xs text-muted-foreground">Firma Colab.</span>
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-2xl font-extrabold text-[#0084d5] tabular-nums">{stats.totalPendingSignature}</span>
+            <span className="text-xs font-medium text-muted-foreground">Firma Colab.</span>
           </div>
-          <p className="text-[11px] text-muted-foreground">Calificadas sin firma aún</p>
+          <p className="text-[11px] text-muted-foreground truncate">Calificadas sin firma aún</p>
         </div>
 
-        <div className="rounded-2xl border bg-card p-4 shadow-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sin Iniciar / En Proc.</span>
-            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600">
+        <div className="rounded-2xl border border-l-4 border-l-amber-500 bg-card p-4 shadow-xs flex flex-col justify-between gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Sin Iniciar / En Proc.</span>
+            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 flex-shrink-0">
               <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold text-amber-600">{stats.totalPending + stats.totalInProgress}</span>
-            <span className="text-xs text-muted-foreground">Por realizar</span>
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-2xl font-extrabold text-amber-600 tabular-nums">{stats.totalPending + stats.totalInProgress}</span>
+            <span className="text-xs font-medium text-muted-foreground">Por realizar</span>
           </div>
-          <p className="text-[11px] text-muted-foreground">Pendientes del líder</p>
+          <p className="text-[11px] text-muted-foreground truncate">Pendientes del líder</p>
         </div>
 
-        <div className="rounded-2xl border bg-card p-4 shadow-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Líderes Asignados</span>
-            <div className="p-2 rounded-xl bg-slate-500/10 text-slate-600">
+        <div className="rounded-2xl border border-l-4 border-l-slate-500 bg-card p-4 shadow-xs flex flex-col justify-between gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Líderes Asignados</span>
+            <div className="p-2 rounded-xl bg-slate-500/10 text-slate-600 flex-shrink-0">
               <Briefcase className="w-4 h-4" />
             </div>
           </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold text-foreground">{stats.totalLeaders}</span>
-            <span className="text-xs text-muted-foreground">Evaluadores</span>
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-2xl font-extrabold text-foreground tabular-nums">{stats.totalLeaders}</span>
+            <span className="text-xs font-medium text-muted-foreground">Evaluadores</span>
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground truncate">
             {stats.totalLeaders > 0 ? (stats.totalAssignments / stats.totalLeaders).toFixed(1) : 0} colab. prom. por líder
           </p>
         </div>
       </div>
 
       {/* Cinta de Filtros y Selector de Vistas */}
-      <div className="rounded-2xl border bg-card p-4 shadow-xs space-y-3">
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+      <div className="rounded-2xl border bg-card p-3.5 sm:p-4 shadow-xs">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
           {/* Buscador */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <div className="relative flex-1 min-w-0">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
               placeholder="Buscar por colaborador, líder, documento o cargo..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-[#012169]/30 transition-all"
+              className="w-full h-10 pl-10 pr-8 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-[#012169]/30 transition-all"
             />
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs cursor-pointer"
               >
                 ✕
               </button>
             )}
           </div>
 
-          {/* Filtro de Estado */}
-          <div className="flex items-center gap-2">
+          {/* Filtros y Acciones de Vista */}
+          <div className="flex flex-wrap items-center gap-2">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-xl border bg-background px-3 py-2 text-xs font-medium focus:outline-none cursor-pointer"
+              className="h-10 rounded-xl border bg-background px-3 text-xs font-medium focus:outline-none cursor-pointer"
             >
               <option value="todos">Todos los Estados</option>
               <option value="pendiente">Sin Iniciar (Pendiente)</option>
@@ -1006,9 +1002,9 @@ NOTIFY pgrst, 'reload schema';`;
             <select
               value={leaderFilter}
               onChange={(e) => setLeaderFilter(e.target.value)}
-              className="rounded-xl border bg-background px-3 py-2 text-xs font-medium focus:outline-none cursor-pointer max-w-[200px] truncate"
+              className="h-10 rounded-xl border bg-background px-3 text-xs font-medium focus:outline-none cursor-pointer max-w-[220px] truncate"
             >
-              <option value="todos">Todos los Líderes</option>
+              <option value="todos">Todos los Líderes ({leaderSummaries.length})</option>
               {leaderSummaries.map((l) => (
                 <option key={l.leaderId} value={l.leaderId}>
                   {l.leaderName} ({l.totalAssigned})
@@ -1016,12 +1012,45 @@ NOTIFY pgrst, 'reload schema';`;
               ))}
             </select>
 
+            {/* Expandir / Contraer Todos (en vista por líder) */}
+            {viewMode === "lideres" && filteredLeaderSummaries.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  const allExpanded = filteredLeaderSummaries.every((l) => !!expandedLeaders[l.leaderId]);
+                  if (allExpanded) {
+                    setExpandedLeaders({});
+                  } else {
+                    const next: Record<string, boolean> = {};
+                    filteredLeaderSummaries.forEach((l) => {
+                      if (l.leaderId) next[l.leaderId] = true;
+                    });
+                    setExpandedLeaders(next);
+                  }
+                }}
+                className="h-10 inline-flex items-center gap-1.5 px-3 rounded-xl border bg-background hover:bg-muted text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                title="Expandir o contraer todos los líderes"
+              >
+                {filteredLeaderSummaries.every((l) => !!expandedLeaders[l.leaderId]) ? (
+                  <>
+                    <ChevronUp className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Contraer</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Expandir</span>
+                  </>
+                )}
+              </button>
+            )}
+
             {/* Selector de Modo de Vista */}
-            <div className="flex items-center bg-muted/60 p-1 rounded-xl border">
+            <div className="h-10 flex items-center bg-muted/60 p-1 rounded-xl border">
               <button
                 onClick={() => setViewMode("lideres")}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                  "h-full px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer",
                   viewMode === "lideres"
                     ? "bg-card text-foreground shadow-xs font-bold"
                     : "text-muted-foreground hover:text-foreground"
@@ -1032,7 +1061,7 @@ NOTIFY pgrst, 'reload schema';`;
               <button
                 onClick={() => setViewMode("general")}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                  "h-full px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer",
                   viewMode === "general"
                     ? "bg-card text-foreground shadow-xs font-bold"
                     : "text-muted-foreground hover:text-foreground"
@@ -1114,223 +1143,313 @@ NOTIFY pgrst, 'reload schema';`;
         </div>
       ) : viewMode === "lideres" ? (
         /* VISTA 1: POR LÍDER (GESTIÓN Y METAS) */
-        <div className="space-y-4">
+        <div className="space-y-2.5">
           {filteredLeaderSummaries.length === 0 ? (
             <div className="rounded-2xl border bg-card p-8 text-center text-muted-foreground">
               No se encontraron líderes con los filtros aplicados.
             </div>
           ) : (
-            filteredLeaderSummaries.map((leader) => {
-              const isExpanded = !!expandedLeaders[leader.leaderId];
-              return (
-                <div
-                  key={leader.leaderId}
-                  className="rounded-2xl border bg-card overflow-hidden shadow-xs transition-all hover:border-border/80"
-                >
-                  {/* Encabezado del Líder */}
-                  <div
-                    onClick={() => toggleLeaderExpand(leader.leaderId)}
-                    className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-muted/30 transition-colors select-none"
-                  >
-                    <div className="flex items-start gap-3.5">
-                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#012169] to-[#0084d5] text-white flex items-center justify-center font-extrabold text-sm shadow-xs flex-shrink-0">
-                        {leader.leaderName.split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-bold text-base text-foreground">{leader.leaderName}</h3>
-                          <span className="text-[11px] font-medium bg-muted px-2 py-0.5 rounded-md text-muted-foreground">
-                            {leader.leaderPosition}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">{leader.leaderEmail}</p>
-                      </div>
-                    </div>
+            <>
+              {/* Cabecera de Columnas para Alineación Vertical Estricta en Escritorio */}
+              <div className="hidden lg:grid lg:grid-cols-12 items-center gap-4 px-5 py-2.5 rounded-xl border bg-muted/40 text-[11px] font-bold uppercase tracking-wider text-muted-foreground select-none">
+                <div className="lg:col-span-5">Líder Evaluador / Cargo</div>
+                <div className="lg:col-span-3">Avance de Evaluaciones</div>
+                <div className="lg:col-span-2 text-center">Estado (Realizadas / Pend.)</div>
+                <div className="lg:col-span-2 flex items-center justify-end gap-3 pr-1">
+                  <span className="w-20 text-right">Promedio</span>
+                  <span className="w-8" />
+                </div>
+              </div>
 
-                    {/* Métricas del Líder */}
-                    <div className="flex items-center gap-3 sm:gap-6 flex-wrap">
-                      {/* Avance */}
-                      <div className="w-36 space-y-1.5">
+              {filteredLeaderSummaries.map((leader) => {
+                const isExpanded = !!expandedLeaders[leader.leaderId];
+                const completedCount = leader.finalizedCount;
+                const remainingCount = Math.max(0, leader.totalAssigned - leader.finalizedCount);
+                const isAllComplete = leader.totalAssigned > 0 && completedCount === leader.totalAssigned;
+
+                return (
+                  <div
+                    key={leader.leaderId}
+                    className={cn(
+                      "rounded-2xl border bg-card overflow-hidden shadow-xs transition-all",
+                      isExpanded ? "border-[#012169]/30 ring-1 ring-[#012169]/10" : "hover:border-border/90"
+                    )}
+                  >
+                    {/* Encabezado del Líder con Grid de 12 Columnas para Alineación Perfecta */}
+                    <div
+                      onClick={() => toggleLeaderExpand(leader.leaderId)}
+                      className="group p-4 sm:px-5 sm:py-4 grid grid-cols-1 lg:grid-cols-12 items-center gap-4 cursor-pointer hover:bg-muted/25 transition-colors select-none"
+                    >
+                      {/* Columna 1: Información del Líder (5/12) */}
+                      <div className="lg:col-span-5 flex items-center gap-3.5 min-w-0">
+                        <div
+                          className={cn(
+                            "w-11 h-11 rounded-2xl text-white flex items-center justify-center font-extrabold text-sm shadow-xs flex-shrink-0 transition-transform group-hover:scale-[1.02]",
+                            isAllComplete
+                              ? "bg-gradient-to-br from-emerald-600 to-teal-500"
+                              : "bg-gradient-to-br from-[#012169] to-[#0084d5]"
+                          )}
+                        >
+                          {leader.leaderName
+                            .split(" ")
+                            .filter(Boolean)
+                            .map((n) => n[0])
+                            .join("")
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-bold text-sm sm:text-base text-foreground truncate">
+                              {leader.leaderName}
+                            </h3>
+                            <span className="text-[10px] font-semibold uppercase tracking-wide bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700 truncate max-w-[260px]">
+                              {leader.leaderPosition}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
+                            <span className="truncate">{leader.leaderEmail}</span>
+                            <span className="text-border">•</span>
+                            <span className="font-medium text-foreground/70 flex-shrink-0">
+                              {leader.totalAssigned} {leader.totalAssigned === 1 ? "asignado" : "asignados"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Columna 2: Barra de Avance con Ancho Fijo en Grid (3/12) */}
+                      <div className="lg:col-span-3 space-y-1.5">
                         <div className="flex items-center justify-between text-xs font-semibold">
                           <span className="text-muted-foreground">Avance</span>
-                          <span className="text-[#012169] dark:text-blue-400 font-bold">{leader.completionPercentage}%</span>
+                          <span
+                            className={cn(
+                              "font-extrabold tabular-nums",
+                              isAllComplete
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : leader.completionPercentage > 0
+                                ? "text-[#012169] dark:text-blue-400"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            {leader.completionPercentage}%
+                          </span>
                         </div>
-                        <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-200/60 dark:border-slate-700">
                           <div
-                            className="bg-[#012169] h-full rounded-full transition-all"
+                            className={cn(
+                              "h-full rounded-full transition-all duration-300",
+                              isAllComplete
+                                ? "bg-emerald-500"
+                                : "bg-gradient-to-r from-[#012169] to-[#0084d5]"
+                            )}
                             style={{ width: `${leader.completionPercentage}%` }}
                           />
                         </div>
-                        <span className="text-[10px] text-muted-foreground block text-right">
-                          {leader.finalizedCount} de {leader.totalAssigned} realizadas
-                        </span>
-                      </div>
-
-                      {/* Badges de Estado */}
-                      <div className="flex items-center gap-1.5 text-xs font-medium">
-                        {leader.finalizedCount > 0 && (
-                          <span className="px-2 py-0.5 rounded-md bg-success-500/10 text-success-600 font-semibold" title="Finalizadas">
-                            ✓ {leader.finalizedCount} fin.
+                        <div className="flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
+                          <span>
+                            {leader.pendingSignatureCount > 0
+                              ? `${leader.pendingSignatureCount} por firma`
+                              : leader.inProgressCount > 0
+                              ? `${leader.inProgressCount} en proceso`
+                              : "Ciclo activo"}
                           </span>
-                        )}
-                        {leader.pendingSignatureCount > 0 && (
-                          <span className="px-2 py-0.5 rounded-md bg-[#0084d5]/10 text-[#0084d5] font-semibold" title="Pendientes de Firma">
-                            ✍ {leader.pendingSignatureCount} firma
-                          </span>
-                        )}
-                        {leader.pendingCount > 0 && (
-                          <span className="px-2 py-0.5 rounded-md bg-muted text-muted-foreground" title="Sin iniciar">
-                            ⏳ {leader.pendingCount} pend.
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Promedio Calificación */}
-                      {leader.averageScore > 0 && (
-                        <div className="text-right hidden sm:block">
-                          <span className="text-[10px] text-muted-foreground block uppercase font-bold">Promedio</span>
-                          <span className="text-sm font-extrabold text-[#012169] dark:text-blue-400">
-                            {formatScore(leader.averageScore)}
+                          <span className="font-medium">
+                            {completedCount} de {leader.totalAssigned} realizadas
                           </span>
                         </div>
-                      )}
+                      </div>
 
-                      {/* Botón Desplegar */}
-                      <div className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted transition-colors">
-                        {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                      {/* Columna 3: Badges de Estado con 2 Slots Fijos Simétricos (2/12) */}
+                      <div className="lg:col-span-2 grid grid-cols-2 gap-2 items-center">
+                        {/* Slot 1: Realizadas (siempre visible para mantener alineación) */}
+                        <div
+                          className={cn(
+                            "h-7 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 tabular-nums border transition-colors",
+                            completedCount > 0
+                              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
+                              : "bg-slate-100/70 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500 border-slate-200/60 dark:border-slate-800"
+                          )}
+                          title={`${completedCount} evaluaciones finalizadas`}
+                        >
+                          <span>✓</span>
+                          <span>{completedCount} fin.</span>
+                        </div>
+
+                        {/* Slot 2: Pendientes / Faltantes (siempre visible para mantener alineación) */}
+                        <div
+                          className={cn(
+                            "h-7 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 tabular-nums border transition-colors",
+                            remainingCount > 0
+                              ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25"
+                              : "bg-emerald-500/5 text-emerald-600/70 dark:text-emerald-400/60 border-emerald-500/15"
+                          )}
+                          title={`${remainingCount} evaluaciones faltantes o pendientes`}
+                        >
+                          <span>{remainingCount > 0 ? "⏳" : "✓"}</span>
+                          <span>{remainingCount} pend.</span>
+                        </div>
+                      </div>
+
+                      {/* Columna 4: Promedio Fijo + Botón Desplegar (2/12) */}
+                      <div className="lg:col-span-2 flex items-center justify-between lg:justify-end gap-3">
+                        <div className="w-20 text-left lg:text-right flex-shrink-0">
+                          <span className="text-[10px] text-muted-foreground block uppercase font-bold tracking-wider">
+                            Promedio
+                          </span>
+                          {leader.averageScore > 0 ? (
+                            <span className="text-sm font-extrabold text-[#012169] dark:text-blue-400 tabular-nums">
+                              {formatScore(leader.averageScore)}
+                            </span>
+                          ) : (
+                            <span className="text-sm font-bold text-muted-foreground/40 tabular-nums">
+                              —
+                            </span>
+                          )}
+                        </div>
+
+                        <div
+                          className={cn(
+                            "w-8 h-8 rounded-lg flex items-center justify-center border transition-colors flex-shrink-0",
+                            isExpanded
+                              ? "bg-[#012169] text-white border-[#012169]"
+                              : "border-border/60 text-muted-foreground group-hover:bg-muted group-hover:text-foreground"
+                          )}
+                        >
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Tabla de Colaboradores del Líder */}
-                  <AnimatePresence>
-                    {isExpanded && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="border-t bg-muted/10 overflow-hidden"
-                      >
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-xs text-left">
-                            <thead className="bg-muted/40 text-muted-foreground font-semibold border-b">
-                              <tr>
-                                <th className="py-2.5 px-4">Documento</th>
-                                <th className="py-2.5 px-4">Colaborador Evaluado</th>
-                                <th className="py-2.5 px-4">Cargo</th>
-                                <th className="py-2.5 px-4">Área</th>
-                                <th className="py-2.5 px-4 text-center">Estado Evaluación</th>
-                                <th className="py-2.5 px-4 text-center">Calificación</th>
-                                <th className="py-2.5 px-4 text-right">Acciones</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/60">
-                              {leader.assignments.map((assignment) => {
-                                const collab = assignment.collaborator;
-                                const evalRes = assignment.evaluation?.result;
-                                const st = assignment.status;
+                    {/* Tabla de Colaboradores del Líder */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="border-t bg-muted/10 overflow-hidden"
+                        >
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs text-left table-fixed min-w-[780px]">
+                              <thead className="bg-muted/40 text-muted-foreground font-semibold border-b">
+                                <tr>
+                                  <th className="py-2.5 px-4 w-[130px]">Documento</th>
+                                  <th className="py-2.5 px-4 w-[240px]">Colaborador Evaluado</th>
+                                  <th className="py-2.5 px-4 w-[190px]">Cargo</th>
+                                  <th className="py-2.5 px-4 w-[160px]">Área</th>
+                                  <th className="py-2.5 px-4 w-[140px] text-center">Estado Evaluación</th>
+                                  <th className="py-2.5 px-4 w-[100px] text-center">Calificación</th>
+                                  <th className="py-2.5 px-4 w-[110px] text-right">Acciones</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-border/60">
+                                {leader.assignments.map((assignment) => {
+                                  const collab = assignment.collaborator;
+                                  const evalRes = assignment.evaluation?.result;
+                                  const st = assignment.status;
 
-                                return (
-                                  <tr key={assignment.id} className="hover:bg-muted/20 transition-colors">
-                                    <td className="py-2.5 px-4 font-mono font-medium text-foreground">
-                                      {collab?.document_number || "—"}
-                                    </td>
-                                    <td className="py-2.5 px-4 font-semibold text-foreground">
-                                      {collab?.full_name || `${collab?.first_name || ""} ${collab?.last_name || ""}`.trim()}
-                                    </td>
-                                    <td className="py-2.5 px-4 text-muted-foreground">
-                                      {Array.isArray(collab?.positions) ? collab?.positions[0]?.name : collab?.positions?.name || "Sin Cargo"}
-                                    </td>
-                                    <td className="py-2.5 px-4 text-muted-foreground">
-                                      {Array.isArray(collab?.areas) ? collab?.areas[0]?.name : collab?.areas?.name || "Sin Área"}
-                                    </td>
-                                    <td className="py-2.5 px-4 text-center">
-                                      {st === "finalizada" ? (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-success-500/10 text-success-600 border border-success-500/20">
-                                          <CheckCircle2 className="w-3 h-3" />
-                                          Finalizada
-                                        </span>
-                                      ) : st === "pendiente_firma" ? (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#0084d5]/10 text-[#0084d5] border border-[#0084d5]/20">
-                                          <Clock className="w-3 h-3" />
-                                          Pendiente Firma
-                                        </span>
-                                      ) : st === "en_proceso" ? (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                                          <Clock className="w-3 h-3" />
-                                          En Proceso
-                                        </span>
-                                      ) : (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border">
-                                          Sin Iniciar
-                                        </span>
-                                      )}
-                                    </td>
-                                    <td className="py-2.5 px-4 text-center font-bold">
-                                      {evalRes?.overall_average != null ? (
-                                        <span className="text-[#012169] dark:text-blue-400">
-                                          {formatScore(evalRes.overall_average)}
-                                        </span>
-                                      ) : (
-                                        <span className="text-muted-foreground/40 font-normal">—</span>
-                                      )}
-                                    </td>
-                                    <td className="py-2.5 px-4 text-right">
-                                      <div className="flex items-center justify-end gap-1.5">
-                                        {assignment.evaluation_id ? (
-                                          <Link
-                                            href={`/evaluaciones/${assignment.evaluation_id}`}
-                                            className="p-1 rounded-md text-muted-foreground hover:text-[#012169] hover:bg-muted transition-colors"
-                                            title="Ver Evaluación"
-                                          >
-                                            <ExternalLink className="w-3.5 h-3.5" />
-                                          </Link>
+                                  return (
+                                    <tr key={assignment.id} className="hover:bg-muted/20 transition-colors">
+                                      <td className="py-2.5 px-4 font-mono font-medium text-foreground truncate">
+                                        {collab?.document_number || "—"}
+                                      </td>
+                                      <td className="py-2.5 px-4 font-semibold text-foreground truncate" title={collab?.full_name || ""}>
+                                        {collab?.full_name || `${collab?.first_name || ""} ${collab?.last_name || ""}`.trim()}
+                                      </td>
+                                      <td className="py-2.5 px-4 text-muted-foreground truncate">
+                                        {Array.isArray(collab?.positions) ? collab?.positions[0]?.name : collab?.positions?.name || "Sin Cargo"}
+                                      </td>
+                                      <td className="py-2.5 px-4 text-muted-foreground truncate">
+                                        {Array.isArray(collab?.areas) ? collab?.areas[0]?.name : collab?.areas?.name || "Sin Área"}
+                                      </td>
+                                      <td className="py-2.5 px-4 text-center">
+                                        {st === "finalizada" ? (
+                                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-success-500/10 text-success-600 border border-success-500/20 min-w-[105px]">
+                                            <CheckCircle2 className="w-3 h-3" />
+                                            Finalizada
+                                          </span>
+                                        ) : st === "pendiente_firma" ? (
+                                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#0084d5]/10 text-[#0084d5] border border-[#0084d5]/20 min-w-[105px]">
+                                            <Clock className="w-3 h-3" />
+                                            Pendiente Firma
+                                          </span>
+                                        ) : st === "en_proceso" ? (
+                                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20 min-w-[105px]">
+                                            <Clock className="w-3 h-3" />
+                                            En Proceso
+                                          </span>
                                         ) : (
-                                          <Link
-                                            href={`/evaluaciones/nueva?collab=${collab?.id}`}
-                                            className="p-1 rounded-md text-muted-foreground hover:text-success-600 hover:bg-muted transition-colors"
-                                            title="Iniciar Evaluación"
-                                          >
-                                            <Plus className="w-3.5 h-3.5" />
-                                          </Link>
+                                          <span className="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border min-w-[105px]">
+                                            Sin Iniciar
+                                          </span>
                                         )}
+                                      </td>
+                                      <td className="py-2.5 px-4 text-center font-bold tabular-nums">
+                                        {evalRes?.overall_average != null ? (
+                                          <span className="text-[#012169] dark:text-blue-400">
+                                            {formatScore(evalRes.overall_average)}
+                                          </span>
+                                        ) : (
+                                          <span className="text-muted-foreground/40 font-normal">—</span>
+                                        )}
+                                      </td>
+                                      <td className="py-2.5 px-4 text-right">
+                                        <div className="flex items-center justify-end gap-1.5">
+                                          {assignment.evaluation_id ? (
+                                            <Link
+                                              href={`/evaluaciones/${assignment.evaluation_id}`}
+                                              className="p-1.5 rounded-md text-muted-foreground hover:text-[#012169] hover:bg-muted transition-colors"
+                                              title="Ver Evaluación"
+                                            >
+                                              <ExternalLink className="w-3.5 h-3.5" />
+                                            </Link>
+                                          ) : (
+                                            <Link
+                                              href={`/evaluaciones/nueva?collab=${collab?.id}`}
+                                              className="p-1.5 rounded-md text-muted-foreground hover:text-success-600 hover:bg-muted transition-colors"
+                                              title="Iniciar Evaluación"
+                                            >
+                                              <Plus className="w-3.5 h-3.5" />
+                                            </Link>
+                                          )}
 
-                                        <button
-                                          onClick={() => {
-                                            setSelectedAssignmentForReassign(assignment);
-                                            setReassignSearch("");
-                                            setReassignNewLeaderId("");
-                                            loadAuxData();
-                                            setShowReassignModal(true);
-                                          }}
-                                          className="p-1 rounded-md text-muted-foreground hover:text-[#0084d5] hover:bg-muted transition-colors cursor-pointer"
-                                          title="Reasignar a otro líder"
-                                        >
-                                          <Edit3 className="w-3.5 h-3.5" />
-                                        </button>
+                                          <button
+                                            onClick={() => {
+                                              setSelectedAssignmentForReassign(assignment);
+                                              setReassignSearch("");
+                                              setReassignNewLeaderId("");
+                                              loadAuxData();
+                                              setShowReassignModal(true);
+                                            }}
+                                            className="p-1.5 rounded-md text-muted-foreground hover:text-[#0084d5] hover:bg-muted transition-colors cursor-pointer"
+                                            title="Reasignar a otro líder"
+                                          >
+                                            <Edit3 className="w-3.5 h-3.5" />
+                                          </button>
 
-                                        <button
-                                          onClick={() => handleDeleteAssignment(assignment.id, collab?.full_name || "este colaborador")}
-                                          className="p-1 rounded-md text-muted-foreground hover:text-danger-600 hover:bg-muted transition-colors cursor-pointer"
-                                          title="Eliminar asignación"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              );
-            })
+                                          <button
+                                            onClick={() => handleDeleteAssignment(assignment.id, collab?.full_name || "este colaborador")}
+                                            className="p-1.5 rounded-md text-muted-foreground hover:text-danger-600 hover:bg-muted transition-colors cursor-pointer"
+                                            title="Eliminar asignación"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </>
           )}
         </div>
       ) : (
