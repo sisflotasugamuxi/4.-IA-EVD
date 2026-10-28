@@ -9,6 +9,7 @@ import {
 import { getPositions, getAreas, createPosition, updatePosition, deletePosition } from "@/app/actions/config";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 interface Area {
   id: string;
@@ -41,6 +42,7 @@ export default function CargosPage() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selectedPos, setSelectedPos] = useState<Position | null>(null);
   const [formData, setFormData] = useState(INITIAL_FORM);
@@ -270,13 +272,15 @@ export default function CargosPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {isLoading ? (
+              {showLoading ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-muted-foreground">
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-                      Cargando cargos...
-                    </div>
+                  <td colSpan={5} className="py-8 text-center">
+                    <LoadingProgress
+                      icon={BookOpen}
+                      title="Cargando catálogo de cargos..."
+                      description="Sincronizando niveles jerárquicos y áreas asociadas..."
+                      progress={loadProgress}
+                    />
                   </td>
                 </tr>
               ) : positions.length === 0 ? (

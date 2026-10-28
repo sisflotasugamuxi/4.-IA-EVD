@@ -7,12 +7,14 @@ import { ArrowLeft, Edit, Mail, Phone, MapPin, Building2, Briefcase, Calendar, U
 import { toast } from "sonner";
 import { getCollaboratorById } from "@/app/actions/collaborators";
 import { formatDate, formatDateTime, getStatusLabel, getInitials } from "@/lib/utils";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 export default function CollaboratorDetailPage() {
   const params = useParams();
   const collaboratorId = params?.id as string;
   const [collaborator, setCollaborator] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
   const [isError, setIsError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,8 +51,8 @@ export default function CollaboratorDetailPage() {
         )}
       </div>
 
-      {isLoading ? (
-        <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground">Cargando colaborador...</div>
+      {showLoading ? (
+        <LoadingProgress icon={User} title="Cargando ficha del colaborador..." description="Consultando datos personales, cargo y estado laboral..." progress={loadProgress} />
       ) : isError ? (
         <div className="rounded-xl border bg-card p-8 text-center text-danger-600">{isError}</div>
       ) : !collaborator ? (

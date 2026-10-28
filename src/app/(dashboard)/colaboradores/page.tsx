@@ -14,6 +14,7 @@ import { cn, getStatusLabel, getInitials, formatDate, getContractTypeLabel } fro
 import type { Collaborator } from "@/types";
 
 import { getCollaborators } from "@/app/actions/collaborators";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 const STATUS_COLORS: Record<string, string> = {
   activo: "text-success-600 bg-success-50 border-success-200 dark:bg-success-950/30",
@@ -47,6 +48,7 @@ export default function ColaboradoresPage() {
 
   const [collaborators, setCollaborators] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
   const [availableAreas, setAvailableAreas] = useState<string[]>([]);
 
   React.useEffect(() => {
@@ -475,13 +477,15 @@ export default function ColaboradoresPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {isLoading ? (
+              {showLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center">
-                    <div className="flex justify-center items-center gap-3">
-                      <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                      <p className="font-medium text-muted-foreground">Cargando colaboradores...</p>
-                    </div>
+                  <td colSpan={8} className="px-4 py-8 text-center">
+                    <LoadingProgress
+                      icon={Users}
+                      title="Cargando directorio de colaboradores..."
+                      description="Consultando información laboral, áreas, cargos y estado EVD..."
+                      progress={loadProgress}
+                    />
                   </td>
                 </tr>
               ) : paginated.length === 0 ? (

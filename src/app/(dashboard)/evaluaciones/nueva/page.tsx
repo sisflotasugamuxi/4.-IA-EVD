@@ -20,6 +20,7 @@ import { getCurrentUserProfile } from "@/app/actions/admin";
 import type { Collaborator } from "@/types";
 import { PdfPreviewModal } from "@/components/ui/pdf-preview-modal";
 import { SignatureInput } from "@/components/ui/signature-input";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 // ---- Types ----
 interface Question {
@@ -120,6 +121,7 @@ function NuevaEvaluacionContent() {
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [currentUserProfile, setCurrentUserProfile] = useState<any | null>(null);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const { isLoading: showFormLoading, progress: formLoadProgress } = useLoadingProgress(isLoadingConfig || isLoadingUser);
 
   useEffect(() => {
     async function loadCurrentUser() {
@@ -962,11 +964,13 @@ function NuevaEvaluacionContent() {
         <span className="sm:hidden">Atrás</span>
       </Link>
 
-      {isLoadingConfig || isLoadingUser ? (
-        <div className="py-12 flex flex-col items-center justify-center gap-4">
-          <div className="w-8 h-8 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" />
-          <p className="text-muted-foreground">Cargando configuración de la evaluación...</p>
-        </div>
+      {showFormLoading ? (
+        <LoadingProgress
+          icon={ClipboardList}
+          title="Cargando configuración de la evaluación..."
+          description="Preparando categorías, preguntas, ponderaciones y colaboradores..."
+          progress={formLoadProgress}
+        />
       ) : currentUserProfile?.roles?.name === 'colaborador' ? (
         <div className="py-16 flex flex-col items-center justify-center gap-6 rounded-2xl border border-danger-200 bg-danger-50/50 dark:border-danger-900/30 dark:bg-danger-950/10">
           <div className="w-16 h-16 rounded-full bg-danger-100 dark:bg-danger-900/20 flex items-center justify-center">
@@ -1952,9 +1956,12 @@ function NuevaEvaluacionContent() {
 export default function NuevaEvaluacionPage() {
   return (
     <Suspense fallback={
-      <div className="py-12 flex flex-col items-center justify-center gap-4">
-        <div className="w-8 h-8 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" />
-        <p className="text-muted-foreground text-sm">Cargando formulario...</p>
+      <div className="py-12 flex flex-col items-center justify-center">
+        <LoadingProgress
+          icon={ClipboardList}
+          title="Cargando formulario de evaluación..."
+          description="Preparando versión activa y listado de colaboradores..."
+        />
       </div>
     }>
       <NuevaEvaluacionContent />

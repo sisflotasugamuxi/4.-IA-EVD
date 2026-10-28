@@ -8,6 +8,7 @@ import {
   ArrowUpDown, ChevronUp, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { getAuditLogs } from "@/app/actions/audit";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -65,6 +66,7 @@ function formatDateTime(dateStr: string): { date: string; time: string } {
 export default function AuditoriaPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
   const [search, setSearch] = useState("");
   const [filterAction, setFilterAction] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -356,13 +358,15 @@ export default function AuditoriaPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {isLoading ? (
+              {showLoading ? (
                 <tr>
-                  <td colSpan={5} className="py-16 text-center">
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                      <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-                      Cargando registros de auditoría...
-                    </div>
+                  <td colSpan={5} className="py-8 text-center">
+                    <LoadingProgress
+                      icon={ClipboardList}
+                      title="Cargando registros de auditoría..."
+                      description="Consultando historial de actividad y trazabilidad del sistema..."
+                      progress={loadProgress}
+                    />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (

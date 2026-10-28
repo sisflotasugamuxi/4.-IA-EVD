@@ -4,10 +4,12 @@ import React, { useState, useEffect } from "react";
 import { GraduationCap, Search, CheckCircle2, AlertCircle, Clock, BookOpen } from "lucide-react";
 import { getTrainingRecommendations } from "@/app/actions/training";
 import { formatDateTime } from "@/lib/utils";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 export default function CapacitacionesPage() {
   const [trainings, setTrainings] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
 
   useEffect(() => {
     async function loadTrainings() {
@@ -41,10 +43,14 @@ export default function CapacitacionesPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {isLoading ? (
-          <div className="col-span-full py-12 flex flex-col items-center justify-center">
-            <div className="w-8 h-8 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin mb-4" />
-            <p className="text-muted-foreground">Cargando capacitaciones recomendadas...</p>
+        {showLoading ? (
+          <div className="col-span-full py-6">
+            <LoadingProgress
+              icon={GraduationCap}
+              title="Cargando capacitaciones recomendadas..."
+              description="Consultando necesidades de formación detectadas en evaluaciones..."
+              progress={loadProgress}
+            />
           </div>
         ) : trainings.length === 0 ? (
           <div className="col-span-full py-12 flex flex-col items-center justify-center border-2 border-dashed rounded-xl">

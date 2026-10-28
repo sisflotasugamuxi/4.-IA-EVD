@@ -26,6 +26,7 @@ import {
   getCollaboratorsWithAssignmentStatus
 } from "@/app/actions/assignments";
 import type { EvaluationAssignment, AssignmentLeaderSummary, AssignmentStatus } from "@/types";
+import { LoadingProgress } from "@/components/ui/loading-progress";
 
 export default function AsignacionesPage() {
   const currentYear = new Date().getFullYear();
@@ -89,16 +90,20 @@ export default function AsignacionesPage() {
   const [importResult, setImportResult] = useState<any | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Progreso de carga inicial del módulo
+  // Progreso de carga inicial del módulo y modales
   const [loadProgress, setLoadProgress] = useState(0);
+  const [auxLoadProgress, setAuxLoadProgress] = useState(0);
+  const [manualSaveProgress, setManualSaveProgress] = useState(0);
+  const [manualSaveStep, setManualSaveStep] = useState("");
 
   // Copiado de SQL
   const [copiedSql, setCopiedSql] = useState(false);
 
-  // Cargar datos principales con progreso animado
+  // Cargar datos principales con progreso animado de 0% a 100%
   const loadData = async () => {
     setLoading(true);
-    setLoadProgress(15);
+    setLoadProgress(0);
+    setTimeout(() => setLoadProgress(15), 25);
 
     const progressTimer = setInterval(() => {
       setLoadProgress((prev) => {
@@ -107,7 +112,7 @@ export default function AsignacionesPage() {
         if (prev < 92) return prev + 4;
         return prev;
       });
-    }, 150);
+    }, 110);
 
     try {
       const res = await getEvaluationAssignmentsDashboard(selectedYear);
@@ -154,20 +159,35 @@ export default function AsignacionesPage() {
     loadData();
   }, [selectedYear]);
 
-  // Cargar líderes y colaboradores cuando se abre un modal
+  // Cargar líderes y colaboradores cuando se abre un modal con animación de 0% a 100%
   const loadAuxData = async () => {
     setLoadingAuxData(true);
+    setAuxLoadProgress(0);
+    setTimeout(() => setAuxLoadProgress(18), 25);
+
+    const auxTimer = setInterval(() => {
+      setAuxLoadProgress((prev) => {
+        if (prev < 45) return prev + 16;
+        if (prev < 78) return prev + 10;
+        if (prev < 94) return prev + 4;
+        return prev;
+      });
+    }, 90);
+
     try {
       const [leadersRes, collabsRes] = await Promise.all([
         getAvailableLeaders(),
         getCollaboratorsWithAssignmentStatus(selectedYear)
       ]);
+      clearInterval(auxTimer);
+      setAuxLoadProgress(100);
       setLeadersList(leadersRes.data || []);
       setCollaboratorsList(collabsRes.data || []);
     } catch (err) {
+      clearInterval(auxTimer);
       console.error(err);
     } finally {
-      setLoadingAuxData(false);
+      setTimeout(() => setLoadingAuxData(false), 180);
     }
   };
 
@@ -332,7 +352,7 @@ export default function AsignacionesPage() {
     });
   }, [leadersList, reassignSearch, selectedAssignmentForReassign]);
 
-  // Guardar asignación manual
+  // Guardar asignación manual con animación de progreso de 0% a 100%
   const handleSaveManual = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualLeaderId) {
@@ -345,22 +365,45 @@ export default function AsignacionesPage() {
     }
 
     setSavingManual(true);
+    setManualSaveProgress(0);
+    setManualSaveStep("Validando líder evaluador y colaboradores seleccionados...");
+    setTimeout(() => setManualSaveProgress(22), 20);
+
+    const saveTimer = setInterval(() => {
+      setManualSaveProgress((prev) => {
+        if (prev < 50) {
+          setManualSaveStep(`Sincronizando ${manualCollabIds.length} asignaciones en base de datos...`);
+          return prev + 16;
+        }
+        if (prev < 88) return prev + 10;
+        if (prev < 96) return prev + 2;
+        return prev;
+      });
+    }, 95);
+
     const res = await bulkAssignCollaborators({
       evaluator_id: manualLeaderId,
       collaborator_ids: manualCollabIds,
       evaluation_year: selectedYear,
       notes: manualNotes,
     });
-    setSavingManual(false);
+
+    clearInterval(saveTimer);
+    setManualSaveProgress(100);
+    setManualSaveStep("¡Asignación completada exitosamente!");
 
     if (res.error) {
+      setSavingManual(false);
       toast.error("Error al asignar colaboradores: " + res.error);
       return;
     }
 
-    toast.success(`Se asignaron exitosamente ${manualCollabIds.length} colaboradores.`);
-    setShowManualModal(false);
-    loadData();
+    setTimeout(() => {
+      setSavingManual(false);
+      toast.success(`Se asignaron exitosamente ${manualCollabIds.length} colaboradores.`);
+      setShowManualModal(false);
+      loadData();
+    }, 220);
   };
 
   // Reasignar Líder
@@ -1612,9 +1655,13 @@ NOTIFY pgrst, 'reload schema';`;
             </div>
 
             {loadingAuxData ? (
-              <div className="py-20 text-center text-muted-foreground space-y-3 flex-1 flex flex-col items-center justify-center">
-                <div className="w-8 h-8 border-3 border-[#012169]/30 border-t-[#012169] rounded-full animate-spin" />
-                <p className="text-sm font-medium">Cargando líderes y colaboradores del sistema...</p>
+              <div className="py-12 px-4 flex-1 flex flex-col items-center justify-center">
+                <LoadingProgress
+                  icon={UserCheck}
+                  title="Cargando líderes y colaboradores del sistema..."
+                  description="Consultando estructura organizacional y estado de asignaciones..."
+                  progress={auxLoadProgress}
+                />
               </div>
             ) : (
               <form onSubmit={handleSaveManual} className="flex flex-col flex-1 overflow-hidden">
@@ -2068,6 +2115,27 @@ NOTIFY pgrst, 'reload schema';`;
                       className="w-full rounded-xl border bg-background px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-[#012169]/30"
                     />
                   </div>
+
+                  {/* Barra de Progreso de Asignación Manual (0% a 100%) */}
+                  {savingManual && (
+                    <div className="p-3.5 rounded-2xl bg-slate-50/90 dark:bg-slate-900/40 border border-[#012169]/25 dark:border-[#0084d5]/30 space-y-2.5 animate-fade-in">
+                      <div className="flex items-center justify-between text-xs font-semibold">
+                        <div className="flex items-center gap-2 text-[#012169] dark:text-[#38bdf8]">
+                          <div className="w-4 h-4 rounded-full border-2 border-[#012169]/30 border-t-[#012169] dark:border-[#38bdf8]/30 dark:border-t-[#38bdf8] animate-spin flex-shrink-0" />
+                          <span>{manualSaveStep || "Guardando asignaciones manuales..."}</span>
+                        </div>
+                        <span className="font-mono font-extrabold text-[#012169] dark:text-[#38bdf8] text-sm tabular-nums bg-[#012169]/10 dark:bg-[#0084d5]/20 px-2 py-0.5 rounded-md">
+                          {manualSaveProgress}%
+                        </span>
+                      </div>
+                      <div className="w-full h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden p-0.5 border border-slate-300 dark:border-slate-700">
+                        <div
+                          className="h-full bg-gradient-to-r from-[#012169] via-[#0084d5] to-[#38bdf8] rounded-full transition-all duration-150 ease-out"
+                          style={{ width: `${manualSaveProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Footer Modal con Resumen de Asignación */}
@@ -2101,7 +2169,7 @@ NOTIFY pgrst, 'reload schema';`;
                       {savingManual ? (
                         <>
                           <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <span>Guardando Asignaciones...</span>
+                          <span className="tabular-nums">Guardando... {manualSaveProgress}%</span>
                         </>
                       ) : (
                         <>

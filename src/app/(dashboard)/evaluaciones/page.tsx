@@ -16,6 +16,7 @@ import { getEvaluations, getEvaluationById, getLeaderProfiles } from "@/app/acti
 import { getAreas, getPositions } from "@/app/actions/config";
 import MultiSelectSearch from "@/components/ui/MultiSelectSearch";
 import { PdfPreviewModal } from "@/components/ui/pdf-preview-modal";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 const STATUS_STYLE: Record<string, string> = {
   borrador: "text-muted-foreground bg-muted border-border",
@@ -76,6 +77,7 @@ export default function EvaluacionesPage() {
       .map((name) => ({ id: name, name }));
   }, [dbLeaders, evaluations]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
 
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [previewPdfBlob, setPreviewPdfBlob] = useState<Blob | null>(null);
@@ -988,13 +990,15 @@ export default function EvaluacionesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {isLoading ? (
+              {showLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center">
-                    <div className="flex justify-center items-center gap-3">
-                      <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                      <p className="font-medium text-muted-foreground">Cargando evaluaciones...</p>
-                    </div>
+                  <td colSpan={8} className="px-4 py-8 text-center">
+                    <LoadingProgress
+                      icon={ClipboardList}
+                      title="Cargando evaluaciones realizadas..."
+                      description="Sincronizando calificaciones, estados y resultados del ciclo..."
+                      progress={loadProgress}
+                    />
                   </td>
                 </tr>
               ) : paginated.length === 0 ? (

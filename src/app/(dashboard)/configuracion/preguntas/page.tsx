@@ -10,6 +10,7 @@ import {
 import { cn, isRoadSafetyQuestion } from "@/lib/utils";
 import { toast } from "sonner";
 import { getEvaluationConfig, saveQuestion, deleteQuestion, updateQuestionStatus } from "@/app/actions/evaluations";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 // ---- Types ----
 interface Question {
@@ -532,6 +533,7 @@ function CategoryPanel({ category, onUpdateQuestions, onReload }: {
 export default function PreguntasConfigPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
   const [searchQ, setSearchQ] = useState("");
 
   const loadData = async () => {
@@ -618,11 +620,13 @@ export default function PreguntasConfigPage() {
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="py-24 flex flex-col items-center justify-center gap-4">
-          <div className="w-8 h-8 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" />
-          <p className="text-muted-foreground font-medium">Cargando preguntas de evaluación...</p>
-        </div>
+      {showLoading ? (
+        <LoadingProgress
+          icon={Settings}
+          title="Cargando preguntas de evaluación..."
+          description="Sincronizando banco de preguntas y categorías activas..."
+          progress={loadProgress}
+        />
       ) : categories.length === 0 ? (
         <div className="py-12 text-center text-muted-foreground border border-dashed rounded-xl bg-muted/10">
           No hay preguntas de evaluación configuradas. Cree categorías primero.

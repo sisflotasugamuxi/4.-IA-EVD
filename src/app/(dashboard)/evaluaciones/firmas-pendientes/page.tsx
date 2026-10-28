@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { cn, getResultLabel, formatScore, getScoreLabel, formatDate, formatDateTime, getStatusLabel } from "@/lib/utils";
 import { SignatureInput } from "@/components/ui/signature-input";
 import { PdfPreviewModal } from "@/components/ui/pdf-preview-modal";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 import { generateEvaluationPdfDocument } from "@/lib/pdf/generate-evaluation-pdf";
 import { 
   getPendingSignatureEvaluations, 
@@ -53,6 +54,7 @@ interface Evaluation {
 export default function FirmasPendientesPage() {
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [loading, setLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(loading);
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
   const itemsPerPage = 10;
@@ -363,10 +365,14 @@ export default function FirmasPendientesPage() {
       {/* Table Section */}
       <div className="rounded-2xl border bg-card shadow-sm overflow-hidden flex flex-col">
         <div className="overflow-x-auto min-h-[300px]">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center p-12 text-muted-foreground gap-3 h-full">
-              <div className="w-8 h-8 border-4 border-brand border-t-transparent rounded-full animate-spin"></div>
-              <p>Cargando evaluaciones...</p>
+          {showLoading ? (
+            <div className="p-8 flex items-center justify-center">
+              <LoadingProgress
+                icon={FileSignature}
+                title="Cargando evaluaciones pendientes de firma..."
+                description="Consultando actas de evaluación calificadas y pendientes por firmar..."
+                progress={loadProgress}
+              />
             </div>
           ) : paginatedEvaluations.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-12 text-muted-foreground gap-3 h-full">

@@ -18,6 +18,7 @@ import Link from "next/link";
 import { getDashboardStats } from "@/app/actions/dashboard";
 import { getAreas, getPositions } from "@/app/actions/config";
 import MultiSelectSearch from "@/components/ui/MultiSelectSearch";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 // ---- Mock Data ----
 // ---- Helper mapping function for KPIs ----
@@ -336,6 +337,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 // ---- MAIN PAGE ----
 export default function DashboardPage() {
   const [stats, setStats] = useState<any>(null);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(!stats);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
@@ -691,11 +693,11 @@ export default function DashboardPage() {
   const recentEvals = filteredEvals.slice(0, 5);
 
 
-  if (!stats) {
+  if (showLoading || !stats) {
     return (
       <div className="py-24 flex flex-col items-center justify-center gap-4">
-        <div className="w-8 h-8 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" />
-        <p className="text-muted-foreground font-medium">Cargando métricas ejecutivas...</p>
+        <LoadingProgress icon={BarChart3} title="Cargando métricas ejecutivas..." description="Consolidando indicadores de desempeño, promedios y cumplimiento..." progress={loadProgress} />
+
       </div>
     );
   }

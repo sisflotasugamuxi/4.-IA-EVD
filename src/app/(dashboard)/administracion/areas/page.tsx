@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { getAreas, createArea, updateArea, deleteArea } from "@/app/actions/config";
 import { toast } from "sonner";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 interface Area {
   id: string;
@@ -24,6 +25,7 @@ const INITIAL_FORM = { name: "", code: "", description: "" };
 export default function AreasPage() {
   const [areas, setAreas] = useState<Area[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selectedArea, setSelectedArea] = useState<Area | null>(null);
   const [formData, setFormData] = useState(INITIAL_FORM);
@@ -228,13 +230,15 @@ export default function AreasPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {isLoading ? (
+              {showLoading ? (
                 <tr>
-                  <td colSpan={4} className="py-12 text-center text-muted-foreground">
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-                      Cargando áreas...
-                    </div>
+                  <td colSpan={4} className="py-8 text-center">
+                    <LoadingProgress
+                      icon={Building2}
+                      title="Cargando áreas y dependencias..."
+                      description="Consultando estructura departamental activa..."
+                      progress={loadProgress}
+                    />
                   </td>
                 </tr>
               ) : areas.length === 0 ? (

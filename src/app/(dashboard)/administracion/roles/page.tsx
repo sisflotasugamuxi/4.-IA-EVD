@@ -9,6 +9,7 @@ import {
 import { getRoles, updateRole, getPermissions, updatePermissions } from "@/app/actions/admin";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 interface Role {
   id: string;
@@ -270,10 +271,12 @@ function RoleEditorPanel({
           </div>
 
           {isLoadingPerms ? (
-            <div className="flex items-center justify-center py-10 gap-3 text-muted-foreground border rounded-xl bg-muted/20">
-              <Loader2 className="w-5 h-5 animate-spin text-brand-500" />
-              <span className="text-sm">Cargando permisos del rol...</span>
-            </div>
+            <LoadingProgress
+              compact
+              icon={Shield}
+              title="Cargando permisos del rol..."
+              description="Sincronizando matriz de accesos por módulo..."
+            />
           ) : (
             <div className="rounded-xl border overflow-hidden">
               <div className="overflow-x-auto">
@@ -451,6 +454,7 @@ function RoleSummaryCard({
 export default function RolesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
   const [openRoleId, setOpenRoleId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -496,22 +500,24 @@ export default function RolesPage() {
       </div>
 
       {/* ── Loading ── */}
-      {isLoading && (
-        <div className="py-20 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-          <div className="w-9 h-9 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" />
-          <p className="text-sm">Cargando roles del sistema...</p>
-        </div>
+      {showLoading && (
+        <LoadingProgress
+          icon={Shield}
+          title="Cargando roles del sistema..."
+          description="Consultando perfiles de acceso y permisos configurados..."
+          progress={loadProgress}
+        />
       )}
 
       {/* ── Role list ── */}
-      {!isLoading && roles.length === 0 && (
+      {!showLoading && roles.length === 0 && (
         <div className="py-16 flex flex-col items-center justify-center border-2 border-dashed rounded-xl text-muted-foreground">
           <Key className="w-12 h-12 opacity-20 mb-3" />
           <p className="font-medium">No hay roles registrados</p>
         </div>
       )}
 
-      {!isLoading && roles.length > 0 && (
+      {!showLoading && roles.length > 0 && (
         <div className="space-y-3">
           {roles.map((role) => (
             <div key={role.id}>

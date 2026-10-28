@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { FileCode2, Plus, Calendar, CheckCircle2, Copy, Edit3, X, AlertTriangle, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 import { getEvaluationVersions, saveEvaluationVersion, cloneEvaluationVersion } from "@/app/actions/evaluations";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 interface EvaluationVersion {
   id: string;
@@ -20,6 +21,7 @@ interface EvaluationVersion {
 export default function VersionesPage() {
   const [versiones, setVersiones] = useState<EvaluationVersion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
   
   // Modal states
   const [showModal, setShowModal] = useState(false);
@@ -195,11 +197,13 @@ export default function VersionesPage() {
       </div>
 
       {/* Loading state */}
-      {isLoading ? (
-        <div className="py-24 flex flex-col items-center justify-center gap-4">
-          <div className="w-8 h-8 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" />
-          <p className="text-muted-foreground font-medium">Cargando formatos de evaluación...</p>
-        </div>
+      {showLoading ? (
+        <LoadingProgress
+          icon={FileCode2}
+          title="Cargando formatos de evaluación..."
+          description="Consultando versiones, periodos fiscales y umbrales..."
+          progress={loadProgress}
+        />
       ) : versiones.length === 0 ? (
         <div className="py-16 text-center border rounded-xl bg-card space-y-3">
           <AlertTriangle className="w-10 h-10 text-warning-500 mx-auto" />

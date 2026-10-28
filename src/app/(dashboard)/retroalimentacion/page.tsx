@@ -4,10 +4,12 @@ import React, { useState, useEffect } from "react";
 import { MessageSquare, Calendar, CheckCircle2, User, Clock, FileText } from "lucide-react";
 import { getFeedbackSessions } from "@/app/actions/feedback";
 import { formatDateTime } from "@/lib/utils";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 export default function RetroalimentacionPage() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
 
   useEffect(() => {
     async function loadSessions() {
@@ -36,10 +38,14 @@ export default function RetroalimentacionPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {isLoading ? (
-          <div className="col-span-full py-12 flex flex-col items-center justify-center">
-            <div className="w-8 h-8 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin mb-4" />
-            <p className="text-muted-foreground">Cargando sesiones...</p>
+        {showLoading ? (
+          <div className="col-span-full py-6">
+            <LoadingProgress
+              icon={MessageSquare}
+              title="Cargando sesiones de retroalimentación..."
+              description="Sincronizando seguimientos 1 a 1 post-evaluación..."
+              progress={loadProgress}
+            />
           </div>
         ) : sessions.length === 0 ? (
           <div className="col-span-full py-12 flex flex-col items-center justify-center border-2 border-dashed rounded-xl">

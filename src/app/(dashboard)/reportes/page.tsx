@@ -27,6 +27,7 @@ import { getAreas, getPositions } from "@/app/actions/config";
 import { getEvaluations, getLeadersReportData, LeaderReportItem } from "@/app/actions/evaluations";
 import { getPMIs } from "@/app/actions/pmi";
 import MultiSelectSearch from "@/components/ui/MultiSelectSearch";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 import { formatScore, getResultLabel, getResultColor, compressImageIfNeeded, cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
@@ -93,6 +94,7 @@ export default function ReportesPage() {
   const [detailFilterTab, setDetailFilterTab] = useState<"all" | "missing" | "completed">("all");
 
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
@@ -947,11 +949,15 @@ export default function ReportesPage() {
     }
   };
 
-  if (isLoading) {
+  if (showLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
-        <p className="text-sm text-muted-foreground font-medium">Cargando módulos de reportes...</p>
+      <div className="flex flex-col items-center justify-center min-h-[420px] p-4">
+        <LoadingProgress
+          icon={FileBarChart2}
+          title="Cargando módulos de reportes y estadísticas..."
+          description="Consolidando cumplimiento por líder, evaluaciones realizadas y planes de mejora..."
+          progress={loadProgress}
+        />
       </div>
     );
   }

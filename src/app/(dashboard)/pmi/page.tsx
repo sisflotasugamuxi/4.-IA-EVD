@@ -10,6 +10,7 @@ import Link from "next/link";
 import { cn, formatDate, getPMIStatusColor, getInitials } from "@/lib/utils";
 
 import { getPMIs } from "@/app/actions/pmi";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 // Helper type based on the UI needs
 type PMI = {
@@ -177,6 +178,7 @@ export default function PMIPage() {
   const [search, setSearch] = useState("");
   const [pmis, setPmis] = useState<PMI[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
 
   React.useEffect(() => {
     async function fetchPmis() {
@@ -273,11 +275,13 @@ export default function PMIPage() {
 
       {/* PMI Cards */}
       <div className="space-y-4">
-        {isLoading ? (
-          <div className="py-12 flex flex-col items-center justify-center gap-4">
-            <div className="w-8 h-8 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" />
-            <p className="text-muted-foreground">Cargando planes de mejoramiento...</p>
-          </div>
+        {showLoading ? (
+          <LoadingProgress
+            icon={Target}
+            title="Cargando planes de mejoramiento (PMI)..."
+            description="Consultando planes activos, seguimientos y acciones de mejora..."
+            progress={loadProgress}
+          />
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">

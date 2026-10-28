@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { getEvaluationById } from "@/app/actions/evaluations";
 import { formatDate, formatDateTime, formatScore, getResultLabel, getStatusLabel, getInitials, compressImageIfNeeded } from "@/lib/utils";
 import { PdfPreviewModal } from "@/components/ui/pdf-preview-modal";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 const SCORE_BADGES: Record<number, string> = {
   5: "bg-success-50 dark:bg-success-950/20 text-success-700 dark:text-success-400 border-success-200 dark:border-success-800/40",
@@ -30,6 +31,7 @@ export default function EvaluationDetailPage() {
   const evaluationId = params?.id as string;
   const [evaluation, setEvaluation] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
   const [isError, setIsError] = useState<string | null>(null);
   
   const [showPdfPreview, setShowPdfPreview] = useState(false);
@@ -613,8 +615,8 @@ export default function EvaluationDetailPage() {
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="rounded-lg sm:rounded-xl border bg-card p-6 sm:p-8 text-center text-xs sm:text-sm text-muted-foreground">Cargando evaluación...</div>
+      {showLoading ? (
+        <LoadingProgress icon={FileText} title="Cargando detalle de evaluación..." description="Consultando respuestas, calificaciones por categoría y firmas..." progress={loadProgress} />
       ) : isError ? (
         <div className="rounded-lg sm:rounded-xl border bg-card p-6 sm:p-8 text-center text-xs sm:text-sm text-danger-600">{isError}</div>
       ) : !evaluation ? (

@@ -8,10 +8,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { getCollaboratorFieldsConfig, updateCollaboratorFieldConfig } from "@/app/actions/fields";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 export default function ParametrizacionCamposPage() {
   const [fields, setFields] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
   const [isDbConnected, setIsDbConnected] = useState(false);
   const [savingFieldId, setSavingFieldId] = useState<string | null>(null);
 
@@ -148,11 +150,13 @@ export default function ParametrizacionCamposPage() {
         </div>
       )}
 
-      {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-20 space-y-4">
-          <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-          <p className="text-muted-foreground text-sm">Cargando configuración de campos...</p>
-        </div>
+      {showLoading ? (
+        <LoadingProgress
+          icon={Settings2}
+          title="Cargando configuración de campos..."
+          description="Consultando parametrización del formulario de colaboradores..."
+          progress={loadProgress}
+        />
       ) : (
         <div className="space-y-8">
           {steps.map((step) => {

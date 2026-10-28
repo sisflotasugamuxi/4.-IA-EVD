@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { SignatureInput } from "@/components/ui/signature-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 interface UserProfile {
   id: string;
@@ -462,6 +463,7 @@ export default function UsuariosPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [positions, setPositions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
   const [search, setSearch] = useState("");
   const [modalUser, setModalUser] = useState<UserProfile | null | "new">(undefined as any);
   const [showModal, setShowModal] = useState(false);
@@ -617,10 +619,14 @@ export default function UsuariosPage() {
 
       {/* User grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {isLoading ? (
-          <div className="col-span-full py-16 flex flex-col items-center justify-center">
-            <div className="w-8 h-8 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin mb-4" />
-            <p className="text-muted-foreground">Cargando usuarios...</p>
+        {showLoading ? (
+          <div className="col-span-full py-6">
+            <LoadingProgress
+              icon={Users}
+              title="Cargando usuarios del sistema..."
+              description="Consultando perfiles, roles y permisos activos..."
+              progress={loadProgress}
+            />
           </div>
         ) : filtered.length === 0 ? (
           <div className="col-span-full py-16 flex flex-col items-center justify-center border-2 border-dashed rounded-xl">

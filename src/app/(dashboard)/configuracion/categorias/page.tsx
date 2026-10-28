@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { FolderTree, Plus, Edit2, Trash2, Scale, AlertCircle } from "lucide-react";
 import { getEvaluationConfig, saveCategory, deleteCategory } from "@/app/actions/evaluations";
 import { toast } from "sonner";
+import { LoadingProgress, useLoadingProgress } from "@/components/ui/loading-progress";
 
 interface Category {
   id: string;
@@ -17,6 +18,7 @@ interface Category {
 export default function CategoriasPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: showLoading, progress: loadProgress } = useLoadingProgress(isLoading);
   const [isModalOpen, setIsModalOpen] = useState(false);
   
   // State for form
@@ -169,11 +171,13 @@ export default function CategoriasPage() {
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="py-24 flex flex-col items-center justify-center gap-4">
-          <div className="w-8 h-8 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin" />
-          <p className="text-muted-foreground font-medium">Cargando categorías...</p>
-        </div>
+      {showLoading ? (
+        <LoadingProgress
+          icon={FolderTree}
+          title="Cargando categorías de evaluación..."
+          description="Consultando ponderaciones y criterios críticos activos..."
+          progress={loadProgress}
+        />
       ) : categories.length === 0 ? (
         <div className="py-12 text-center text-muted-foreground border border-dashed rounded-xl bg-muted/10">
           No hay categorías configuradas en la evaluación activa.
