@@ -142,7 +142,7 @@ export async function getCurrentLeaderScope(year?: number): Promise<LeaderScope>
     const adminClient = createAdminClient();
     const { data: profile } = await adminClient
       .from("profiles")
-      .select("id, roles(name)")
+      .select("id, collaborator_id, roles(name)")
       .eq("id", userId)
       .maybeSingle();
 
@@ -153,7 +153,7 @@ export async function getCurrentLeaderScope(year?: number): Promise<LeaderScope>
       return { isLeader: false, userId, roleName, assignedCollaboratorIds };
     }
 
-    // Consultar asignaciones de evaluación para este líder
+    // Consultar asignaciones de evaluación, evaluaciones directas y colaboradores donde el líder es jefe/responsable
     let assignmentsQuery = adminClient
       .from("evaluation_assignments")
       .select("collaborator_id")
@@ -163,12 +163,23 @@ export async function getCurrentLeaderScope(year?: number): Promise<LeaderScope>
       assignmentsQuery = assignmentsQuery.eq("evaluation_year", year);
     }
 
-    const [asgRes, evalsRes] = await Promise.all([
+    const leaderCollabId = (profile as any)?.collaborator_id || null;
+    const bossFilters = [`responsible_manager_id.eq.${userId}`];
+    if (leaderCollabId) {
+      bossFilters.push(`immediate_boss_id.eq.${leaderCollabId}`);
+      bossFilters.push(`area_leader_id.eq.${leaderCollabId}`);
+    }
+
+    const [asgRes, evalsRes, directCollabsRes] = await Promise.all([
       assignmentsQuery,
       adminClient
         .from("evaluations")
         .select("evaluatee_id")
         .eq("evaluator_id", userId),
+      adminClient
+        .from("collaborators")
+        .select("id")
+        .or(bossFilters.join(",")),
     ]);
 
     if (asgRes.data) {
@@ -180,6 +191,12 @@ export async function getCurrentLeaderScope(year?: number): Promise<LeaderScope>
     if (evalsRes.data) {
       evalsRes.data.forEach((row: any) => {
         if (row.evaluatee_id) assignedCollaboratorIds.add(row.evaluatee_id);
+      });
+    }
+
+    if (directCollabsRes.data) {
+      directCollabsRes.data.forEach((row: any) => {
+        if (row.id) assignedCollaboratorIds.add(row.id);
       });
     }
 

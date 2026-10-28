@@ -36,29 +36,34 @@ async function getSupabase() {
 
 export async function createCollaborator(collaboratorData: any) {
   const supabase = await getSupabase();
-  
+  const adminClient = getSupabaseAdmin();
+
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) throw new Error("No autenticado");
-  
-  const { data: profile } = await supabase
+
+  const { data: profile } = await adminClient
     .from("profiles")
-    .select("company_id")
+    .select("company_id, collaborator_id, roles(name)")
     .eq("id", userData.user.id)
     .single();
 
   if (!profile?.company_id) throw new Error("Compañía no encontrada");
 
+  const roleObj = Array.isArray(profile.roles) ? profile.roles[0] : (profile.roles as any);
+  const isCreatorLeader = (roleObj?.name || "").toLowerCase() === "lider";
+  const creatorCollaboratorId = (profile as any).collaborator_id || null;
+
   // Format data
-  let responsibleManagerId = collaboratorData.responsible_manager_id || null;
+  let responsibleManagerId = collaboratorData.responsible_manager_id || (isCreatorLeader ? userData.user.id : null);
   if (responsibleManagerId) {
-    const { data: managerProfile } = await supabase
+    const { data: managerProfile } = await adminClient
       .from("profiles")
       .select("id")
       .eq("id", responsibleManagerId)
       .eq("company_id", profile.company_id)
-      .single();
+      .maybeSingle();
 
-    responsibleManagerId = managerProfile?.id || null;
+    responsibleManagerId = managerProfile?.id || (isCreatorLeader ? userData.user.id : null);
   }
 
   const dataToInsert = {
@@ -82,12 +87,12 @@ export async function createCollaborator(collaboratorData: any) {
     payroll_type: collaboratorData.payroll_type || null,
     hire_date: collaboratorData.hire_date || null,
     status: collaboratorData.status || "activo",
-    immediate_boss_id: collaboratorData.immediate_boss_id || null,
-    area_leader_id: collaboratorData.area_leader_id || null,
+    immediate_boss_id: collaboratorData.immediate_boss_id || (isCreatorLeader ? creatorCollaboratorId : null),
+    area_leader_id: collaboratorData.area_leader_id || (isCreatorLeader ? creatorCollaboratorId : null),
     responsible_manager_id: responsibleManagerId,
   };
 
-  const { data, error } = await supabase
+  const { data, error } = await adminClient
     .from("collaborators")
     .insert(dataToInsert)
     .select()
@@ -98,7 +103,38 @@ export async function createCollaborator(collaboratorData: any) {
     return { error: error.message };
   }
 
+  // Si un líder crea el colaborador (o si se especificó un líder responsable), enlazarlo automáticamente en evaluation_assignments
+  const targetLeaderProfileId = isCreatorLeader ? userData.user.id : responsibleManagerId;
+  if (targetLeaderProfileId && data?.id) {
+    try {
+      const currentYear = new Date().getFullYear();
+      await adminClient
+        .from("evaluation_assignments")
+        .upsert(
+          {
+            company_id: profile.company_id,
+            evaluation_year: currentYear,
+            evaluator_id: targetLeaderProfileId,
+            collaborator_id: data.id,
+            status: "pendiente",
+            notes: isCreatorLeader
+              ? "Asignado automáticamente al ser creado por el líder."
+              : "Asignado automáticamente al crear el colaborador.",
+            assigned_by: userData.user.id,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "evaluation_year,collaborator_id" }
+        );
+    } catch (asgErr) {
+      console.warn("Warning linking new collaborator to leader assignment:", asgErr);
+    }
+  }
+
   revalidatePath("/colaboradores");
+  revalidatePath("/administracion/asignaciones");
+  revalidatePath("/dashboard");
+  revalidatePath("/evaluaciones/nueva");
+  revalidatePath("/reportes");
 
   // Registrar en auditoría
   try {
@@ -106,7 +142,7 @@ export async function createCollaborator(collaboratorData: any) {
       "crear",
       "collaborators",
       data.id,
-      `Colaborador creado: ${dataToInsert.first_name} ${dataToInsert.last_name} (${dataToInsert.document_number})`
+      `Colaborador creado: ${dataToInsert.first_name} ${dataToInsert.last_name} (${dataToInsert.document_number})${isCreatorLeader ? " y asignado automáticamente al líder creador" : ""}`
     );
   } catch (_) { /* no bloquear */ }
 
@@ -272,19 +308,23 @@ export async function updateCollaborator(collaboratorId: string, updates: any) {
 
 export async function importCollaborators(rows: any[]) {
   const supabase = await getSupabase();
+  const adminClient = getSupabaseAdmin();
   
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { error: "No autenticado" };
   
-  const { data: profile } = await supabase
+  const { data: profile } = await adminClient
     .from("profiles")
-    .select("company_id")
+    .select("company_id, collaborator_id, roles(name)")
     .eq("id", userData.user.id)
     .single();
 
   if (!profile?.company_id) return { error: "Compañía no encontrada" };
 
   const companyId = profile.company_id;
+  const roleObj = Array.isArray(profile.roles) ? profile.roles[0] : (profile.roles as any);
+  const isCreatorLeader = (roleObj?.name || "").toLowerCase() === "lider";
+  const creatorCollaboratorId = (profile as any).collaborator_id || null;
 
   // Fetch existing areas and positions
   const { data: existingAreas } = await supabase.from("areas").select("id, name").eq("company_id", companyId);
@@ -375,19 +415,51 @@ export async function importCollaborators(rows: any[]) {
       termination_date: terminationDate,
       contract_type: contractType,
       payroll_type: row["payroll_type"] || null,
-      status: statusVal
+      status: statusVal,
+      ...(isCreatorLeader
+        ? {
+            responsible_manager_id: userData.user.id,
+            ...(creatorCollaboratorId
+              ? { immediate_boss_id: creatorCollaboratorId, area_leader_id: creatorCollaboratorId }
+              : {}),
+          }
+        : {}),
     });
   }
 
   // Bulk upsert
   if (recordsToInsert.length > 0) {
-    const { error } = await supabase
+    const { data: upsertedCollabs, error } = await adminClient
       .from("collaborators")
-      .upsert(recordsToInsert, { onConflict: 'company_id,document_number' });
+      .upsert(recordsToInsert, { onConflict: 'company_id,document_number' })
+      .select("id");
 
     if (error) {
       console.error("Error bulk upserting:", error);
       return { error: error.message };
+    }
+
+    // Si quien importa es un líder, asignar automáticamente los colaboradores importados a este líder
+    if (isCreatorLeader && upsertedCollabs && upsertedCollabs.length > 0) {
+      try {
+        const currentYear = new Date().getFullYear();
+        const assignmentsPayload = upsertedCollabs.map((c: any) => ({
+          company_id: companyId,
+          evaluation_year: currentYear,
+          evaluator_id: userData.user.id,
+          collaborator_id: c.id,
+          status: "pendiente",
+          notes: "Asignado automáticamente al ser importado por el líder.",
+          assigned_by: userData.user.id,
+          updated_at: new Date().toISOString(),
+        }));
+
+        await adminClient
+          .from("evaluation_assignments")
+          .upsert(assignmentsPayload, { onConflict: "evaluation_year,collaborator_id" });
+      } catch (asgErr) {
+        console.warn("Warning linking imported collaborators to leader:", asgErr);
+      }
     }
 
     // Sync emails with auth / profiles if they exist
