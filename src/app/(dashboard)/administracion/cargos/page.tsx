@@ -31,11 +31,11 @@ type ModalMode = "create" | "edit" | "delete" | null;
 const INITIAL_FORM = { name: "", code: "", description: "", area_id: "", level: 1 };
 
 const LEVEL_LABELS: Record<number, { label: string; color: string }> = {
-  1: { label: "Operativo",    color: "bg-slate-100 text-slate-700 border-slate-200" },
-  2: { label: "Profesional",  color: "bg-blue-100 text-blue-700 border-blue-200" },
-  3: { label: "Coordinación", color: "bg-teal-100 text-teal-700 border-teal-200" },
-  4: { label: "Jefatura",     color: "bg-amber-100 text-amber-700 border-amber-200" },
-  5: { label: "Gerencia",     color: "bg-purple-100 text-purple-700 border-purple-200" },
+  1: { label: "Operativo",    color: "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700" },
+  2: { label: "Profesional",  color: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800" },
+  3: { label: "Coordinación", color: "bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-800" },
+  4: { label: "Jefatura",     color: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" },
+  5: { label: "Gerencia",     color: "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800" },
 };
 
 export default function CargosPage() {

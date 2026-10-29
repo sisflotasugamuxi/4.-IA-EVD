@@ -71,9 +71,9 @@ export default function CapacitacionesPage() {
                   </div>
                 </div>
                 <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
-                  t.status === 'completada' ? 'bg-success-100 text-success-700' :
-                  t.status === 'programada' ? 'bg-brand-100 text-brand-700' :
-                  'bg-warning-100 text-warning-700'
+                  t.status === 'completada' ? 'bg-success-100 text-success-700 dark:bg-success-950/40 dark:text-success-300' :
+                  t.status === 'programada' ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300' :
+                  'bg-warning-100 text-warning-700 dark:bg-warning-950/40 dark:text-warning-300'
                 }`}>
                   {t.status.toUpperCase()}
                 </span>

@@ -835,7 +835,7 @@ NOTIFY pgrst, 'reload schema';`;
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <div className="p-2.5 rounded-xl bg-[#012169]/10 text-[#012169]">
+            <div className="p-2.5 rounded-xl bg-[#012169]/10 text-[#012169] dark:bg-[#0084d5]/20 dark:text-[#38bdf8]">
               <UserCheck className="w-6 h-6" />
             </div>
             <div>
@@ -1166,7 +1166,7 @@ NOTIFY pgrst, 'reload schema';`;
         </div>
       ) : assignments.length === 0 ? (
         <div className="rounded-2xl border border-dashed bg-card p-12 text-center space-y-4">
-          <div className="w-14 h-14 rounded-2xl bg-[#012169]/10 text-[#012169] flex items-center justify-center mx-auto">
+          <div className="w-14 h-14 rounded-2xl bg-[#012169]/10 text-[#012169] dark:bg-[#0084d5]/20 dark:text-[#38bdf8] flex items-center justify-center mx-auto">
             <UserCheck className="w-7 h-7" />
           </div>
           <div className="space-y-1">
@@ -2369,7 +2369,7 @@ NOTIFY pgrst, 'reload schema';`;
                   accept=".xlsx, .xls"
                   className="hidden"
                 />
-                <div className="w-12 h-12 rounded-2xl bg-[#012169]/10 text-[#012169] flex items-center justify-center mx-auto mb-2">
+                <div className="w-12 h-12 rounded-2xl bg-[#012169]/10 text-[#012169] dark:bg-[#0084d5]/20 dark:text-[#38bdf8] flex items-center justify-center mx-auto mb-2">
                   <FileSpreadsheet className="w-6 h-6" />
                 </div>
                 {excelFile ? (

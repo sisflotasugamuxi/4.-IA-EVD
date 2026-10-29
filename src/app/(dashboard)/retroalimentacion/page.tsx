@@ -57,16 +57,16 @@ export default function RetroalimentacionPage() {
             <div key={session.id} className="p-5 rounded-xl border bg-card hover:shadow-md transition-all group">
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-brand-50 flex items-center justify-center text-brand-600 font-bold">
+                  <div className="w-10 h-10 rounded-full bg-brand-50 dark:bg-brand-900/40 flex items-center justify-center text-brand-600 dark:text-brand-300 font-bold">
                     {session.evaluation?.collaborator?.full_name?.charAt(0) || "U"}
                   </div>
                   <div>
-                    <h3 className="font-semibold text-sm">{session.evaluation?.collaborator?.full_name || "Usuario Eliminado"}</h3>
+                    <h3 className="font-semibold text-sm text-foreground">{session.evaluation?.collaborator?.full_name || "Usuario Eliminado"}</h3>
                     <p className="text-xs text-muted-foreground">{session.evaluation?.collaborator?.positions?.name}</p>
                   </div>
                 </div>
                 <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
-                  session.status === 'realizada' ? 'bg-success-100 text-success-700' : 'bg-warning-100 text-warning-700'
+                  session.status === 'realizada' ? 'bg-success-100 text-success-700 dark:bg-success-950/40 dark:text-success-300' : 'bg-warning-100 text-warning-700 dark:bg-warning-950/40 dark:text-warning-300'
                 }`}>
                   {session.status.toUpperCase()}
                 </span>
